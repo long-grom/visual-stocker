@@ -431,7 +431,7 @@ export default function InventoryPlanning() {
                     <p>Based on your current settings, no products need to be reordered.</p>
                   </Banner>
                 ) : (
-                  <BlockStack gap="5">
+                  <BlockStack gap="16">
                     {filteredData.filter(p => p.needsReorder).map(product => {
                       // Get sizes that need reordering
                       const sizesToReorder = Object.entries(product.sizeReorderNeeds)
@@ -441,98 +441,98 @@ export default function InventoryPlanning() {
                       if (sizesToReorder.length === 0) return null;
                       
                       return (
-                        <Card key={product.id}>
-                          <Box padding="4">
-                            <InlineStack gap="5" align="start">
-                              {product.imageUrl && (
-                                <Box width="80px">
-                                  <Thumbnail
-                                    source={product.imageUrl}
-                                    alt={product.imageAlt}
-                                    size="large"
-                                  />
-                                </Box>
-                              )}
-                              
-                              <BlockStack gap="2" flexible>
-                                <InlineStack align="space-between">
-                                  <Text variant="headingMd">{product.title}</Text>
-                                  <Badge 
-                                    status={
-                                      sizesToReorder.some(([_, details]) => details.urgent) 
-                                        ? "critical" 
-                                        : "warning"
-                                    }
-                                  >
-                                    {sizesToReorder.some(([_, details]) => details.urgent) 
-                                      ? "Urgent" 
-                                      : "Reorder Soon"}
-                                  </Badge>
-                                </InlineStack>
+                        <Box key={product.id} paddingBlockEnd="5">
+                          <Card>
+                            <Box padding="5">
+                              <InlineStack gap="6" align="start">
+                                {product.imageUrl && (
+                                  <Box width="100px">
+                                    <Thumbnail
+                                      source={product.imageUrl}
+                                      alt={product.imageAlt}
+                                      size="large"
+                                    />
+                                  </Box>
+                                )}
                                 
-                                <InlineStack gap="5" wrap={false}>
-                                  <Text variant="bodySm">Vendor: {product.vendor}</Text>
-                                  <Text variant="bodySm">Type: {product.type}</Text>
-                                  <Text variant="bodySm">
-                                    Current Inventory: {product.totalInventory} units
-                                  </Text>
-                                </InlineStack>
-                                
-                                <Divider />
-                                
-                                <BlockStack gap="3">
-                                  <Text variant="headingSm">
-                                    Recommended Order:
-                                  </Text>
-                                  
-                                  <BlockStack gap="2">
-                                    {sizesToReorder.map(([size, details]) => (
-                                      <InlineStack key={size} align="space-between" gap="2">
-                                        <InlineStack gap="2">
-                                          <Badge 
-                                            status={details.urgent ? "critical" : "warning"}
-                                          >
-                                            Size {size}
-                                          </Badge>
-                                          <Text>
-                                            Current: {details.currentStock} units 
-                                            ({details.daysRemaining} days remaining)
-                                          </Text>
-                                        </InlineStack>
-                                        
-                                        <Text fontWeight="bold">
-                                          Order {details.reorderQuantity} units
-                                        </Text>
-                                      </InlineStack>
-                                    ))}
-                                  </BlockStack>
-                                </BlockStack>
-                                
-                                <Divider />
-                                
-                                <InlineStack align="space-between">
-                                  <InlineStack gap="4">
-                                    <BlockStack gap="1">
-                                      <Text variant="bodySm">Recommended Reorder Date:</Text>
-                                      <Text fontWeight="semibold">
-                                        {formatDate(product.reorderDate)}
-                                      </Text>
-                                    </BlockStack>
-                                    
-                                    <BlockStack gap="1">
-                                      <Text variant="bodySm">Estimated Delivery Date (if ordered today):</Text>
-                                      <Text fontWeight="semibold">
-                                        {formatDate(product.deliveryDate)}
-                                      </Text>
-                                    </BlockStack>
+                                <BlockStack gap="4" flexible>
+                                  <InlineStack align="space-between">
+                                    <Text variant="headingMd">{product.title}</Text>
                                   </InlineStack>
                                   
-                                  <Button primary>Create Purchase Order</Button>
-                                </InlineStack>
-                              </BlockStack>
-                            </InlineStack>
-                          </Box>
-                        </Card>
+                                  <InlineStack gap="6" wrap={false}>
+                                    <Text variant="bodySm">
+                                      Current Inventory: {product.totalInventory} units
+                                    </Text>
+                                  </InlineStack>
+                                  
+                                  <Divider />
+                                  
+                                  <BlockStack gap="4">
+                                    <Text variant="headingSm">
+                                      Recommended Order:
+                                    </Text>
+                                    
+                                    <BlockStack gap="10">
+                                      {sizesToReorder.map(([size, details]) => (
+                                        <Box 
+                                          key={size} 
+                                          padding="4" 
+                                          background="bg-surface" 
+                                          borderRadius="2"
+                                          shadow="md"
+                                          border="base"
+                                        >
+                                          <BlockStack gap="3">
+                                            <InlineStack align="space-between">
+                                              <InlineStack gap="4">
+                                                <Badge 
+                                                  status="warning"
+                                                  size="large"
+                                                >
+                                                  Size {size}
+                                                </Badge>
+                                                
+                                                <Text>
+                                                  Current stock: {details.currentStock} units 
+                                                  ({details.daysRemaining} days remaining)
+                                                </Text>
+                                              </InlineStack>
+                                              
+                                              <Text fontWeight="bold" variant="headingSm">
+                                                Order {details.reorderQuantity} units
+                                              </Text>
+                                            </InlineStack>
+                                          </BlockStack>
+                                        </Box>
+                                      ))}
+                                    </BlockStack>
+                                  </BlockStack>
+                                  
+                                  <Box paddingBlockStart="5" paddingBlockEnd="4">
+                                    <Divider />
+                                  </Box>
+                                  
+                                  <Box paddingBlockStart="2" paddingBlockEnd="2">
+                                    <BlockStack gap="5">
+                                      <Text variant="headingSm">Delivery Timeline</Text>
+                                      <BlockStack gap="4">
+                                        <Box background="bg-surface" padding="3" borderRadius="2" shadow="sm">
+                                          <BlockStack gap="2">
+                                            <Text variant="bodySm" fontWeight="semibold">Estimated Delivery Date (if ordered today):</Text>
+                                            <Text fontWeight="bold" variant="bodyMd">
+                                              {formatDate(product.deliveryDate)}
+                                            </Text>
+                                          </BlockStack>
+                                        </Box>
+                                      </BlockStack>
+                                    </BlockStack>
+                                  </Box>
+                                </BlockStack>
+                              </InlineStack>
+                            </Box>
+                          </Card>
+                        </Box>
                       );
                     })}
                   </BlockStack>
