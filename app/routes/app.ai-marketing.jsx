@@ -79,11 +79,31 @@ export default function AIMarketingRecommendations() {
     // Calculate sizes availability percentage
     const sizeVariants = variants.filter(v => v.size);
     const uniqueSizes = [...new Set(sizeVariants.map(v => v.size))];
-    const sizesWithStock = uniqueSizes.filter(size => 
-      sizeVariants.find(v => v.size === size && v.quantity > 0)
+    
+    // Track inventory by size
+    const sizeInventory = {};
+    uniqueSizes.forEach(size => {
+      const variantsWithSize = sizeVariants.filter(v => v.size === size);
+      sizeInventory[size] = variantsWithSize.reduce((sum, v) => sum + v.quantity, 0);
+    });
+    
+    // Get common fashion sizes
+    const commonSizes = ['S', 'M', 'L'];
+    const hasCommonSizes = commonSizes.every(size => 
+      uniqueSizes.includes(size) && sizeInventory[size] > 0
     );
-    const sizeAvailabilityPercentage = uniqueSizes.length > 0 
-      ? (sizesWithStock.length / uniqueSizes.length) * 100 
+    
+    // Check if all sizes have at least 5 units
+    const sizesWithAdequateStock = uniqueSizes.filter(size => sizeInventory[size] >= 5);
+    const hasFullSizeRange = uniqueSizes.length > 0 && 
+      sizesWithAdequateStock.length === uniqueSizes.length;
+    
+    // Calculate common sizes availability percentage
+    const availableCommonSizes = commonSizes.filter(size => 
+      uniqueSizes.includes(size) && sizeInventory[size] > 0
+    );
+    const commonSizesAvailability = commonSizes.some(s => uniqueSizes.includes(s)) 
+      ? (availableCommonSizes.length / commonSizes.filter(s => uniqueSizes.includes(s)).length) * 100 
       : 0;
     
     return {
@@ -95,9 +115,12 @@ export default function AIMarketingRecommendations() {
       imageAlt: product.featuredImage?.altText || product.title,
       variants,
       totalInventory,
-      sizeAvailabilityPercentage,
-      sizesCount: uniqueSizes.length,
-      sizesWithStockCount: sizesWithStock.length
+      uniqueSizes,
+      sizeInventory,
+      hasCommonSizes,
+      hasFullSizeRange,
+      sizesWithAdequateStock,
+      commonSizesAvailability
     };
   });
 
@@ -111,47 +134,59 @@ export default function AIMarketingRecommendations() {
     };
 
     productData.forEach(product => {
-      // Identify products with good size availability (balanced inventory)
-      if (product.sizeAvailabilityPercentage >= 80 && product.sizesCount >= 3) {
-        recommendations.balancedInventory.push({
-          id: product.id,
-          title: product.title,
-          imageUrl: product.imageUrl,
-          reason: `${product.sizesWithStockCount} out of ${product.sizesCount} sizes in stock`,
-          inventory: product.totalInventory
-        });
-      }
-      
-      // Identify products with very low stock across sizes
-      if (product.sizeAvailabilityPercentage <= 30 && product.totalInventory > 0) {
-        recommendations.lowStockWarnings.push({
-          id: product.id,
-          title: product.title,
-          imageUrl: product.imageUrl,
-          reason: `Only ${product.sizesWithStockCount} out of ${product.sizesCount} sizes in stock`,
-          inventory: product.totalInventory
-        });
-      }
-      
-      // Identify products with high inventory (potential for promotions)
-      if (product.totalInventory > 30) {
-        recommendations.overstockedItems.push({
-          id: product.id,
-          title: product.title,
-          imageUrl: product.imageUrl,
-          reason: `High inventory level: ${product.totalInventory} units`,
-          inventory: product.totalInventory
-        });
-      }
-      
-      // Identify specific promotion opportunities
-      if (product.totalInventory > 15 && product.sizeAvailabilityPercentage >= 50) {
+      // Identify products with a full size range (all sizes have at least 5 units)
+      if (product.hasFullSizeRange && product.uniqueSizes.length >= 3) {
         recommendations.promotionOpportunities.push({
           id: product.id,
           title: product.title,
           imageUrl: product.imageUrl,
-          reason: `Good inventory levels with ${product.sizesWithStockCount} sizes available`,
-          inventory: product.totalInventory
+          reason: `Full size range available with at least 5 units in each size`,
+          inventory: product.totalInventory,
+          sizes: Object.entries(product.sizeInventory)
+            .map(([size, qty]) => `${size}: ${qty}`)
+            .join(', ')
+        });
+      }
+      
+      // Identify products with very low stock in common sizes but stock in other sizes
+      if (product.commonSizesAvailability < 50 && product.totalInventory > 10) {
+        recommendations.lowStockWarnings.push({
+          id: product.id,
+          title: product.title,
+          imageUrl: product.imageUrl,
+          reason: `Limited availability in popular sizes S, M, L`,
+          inventory: product.totalInventory,
+          sizes: Object.entries(product.sizeInventory)
+            .map(([size, qty]) => `${size}: ${qty}`)
+            .join(', ')
+        });
+      }
+      
+      // Identify products with high inventory but not all sizes (potential for targeted promotions)
+      if (product.totalInventory > 30 && !product.hasFullSizeRange) {
+        recommendations.overstockedItems.push({
+          id: product.id,
+          title: product.title,
+          imageUrl: product.imageUrl,
+          reason: `High inventory but uneven size distribution`,
+          inventory: product.totalInventory,
+          sizes: Object.entries(product.sizeInventory)
+            .map(([size, qty]) => `${size}: ${qty}`)
+            .join(', ')
+        });
+      }
+      
+      // Identify products with balanced inventory (good stock across sizes)
+      if (product.sizesWithAdequateStock.length >= 3 && product.commonSizesAvailability >= 50) {
+        recommendations.balancedInventory.push({
+          id: product.id,
+          title: product.title,
+          imageUrl: product.imageUrl,
+          reason: `Good stock in ${product.sizesWithAdequateStock.length} sizes including popular sizes`,
+          inventory: product.totalInventory,
+          sizes: Object.entries(product.sizeInventory)
+            .map(([size, qty]) => `${size}: ${qty}`)
+            .join(', ')
         });
       }
     });
@@ -209,6 +244,11 @@ export default function AIMarketingRecommendations() {
                           <Text variant="bodySm" color="subdued">
                             - {item.reason}
                           </Text>
+                          {item.sizes && (
+                            <Text variant="bodySm" color="subdued">
+                              Sizes: {item.sizes}
+                            </Text>
+                          )}
                         </LegacyStack>
                       </List.Item>
                     ))}
@@ -249,6 +289,11 @@ export default function AIMarketingRecommendations() {
                           <Text variant="bodySm" color="subdued">
                             - {item.reason}
                           </Text>
+                          {item.sizes && (
+                            <Text variant="bodySm" color="subdued">
+                              Sizes: {item.sizes}
+                            </Text>
+                          )}
                         </LegacyStack>
                       </List.Item>
                     ))}
@@ -289,6 +334,11 @@ export default function AIMarketingRecommendations() {
                           <Text variant="bodySm" color="subdued">
                             - {item.reason}
                           </Text>
+                          {item.sizes && (
+                            <Text variant="bodySm" color="subdued">
+                              Sizes: {item.sizes}
+                            </Text>
+                          )}
                         </LegacyStack>
                       </List.Item>
                     ))}
@@ -329,6 +379,11 @@ export default function AIMarketingRecommendations() {
                           <Text variant="bodySm" color="subdued">
                             - {item.reason}
                           </Text>
+                          {item.sizes && (
+                            <Text variant="bodySm" color="subdued">
+                              Sizes: {item.sizes}
+                            </Text>
+                          )}
                         </LegacyStack>
                       </List.Item>
                     ))}
