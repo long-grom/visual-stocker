@@ -271,10 +271,16 @@ export default function InventoryVisualization() {
     // Group by size first
     const sizeGroups = {};
     const colorGroups = {};
+    let totalQuantity = 0;
+    let hasSizeOrColor = false;
     
     // Process size variants
     variants.forEach(variant => {
+      // Keep track of total inventory regardless of attributes
+      totalQuantity += variant.quantity;
+      
       if (variant.size) {
+        hasSizeOrColor = true;
         // For sizes, check if it's a standard size or a specialized size (like "XS (Kids)")
         let key = variant.size;
         if (key.includes('(')) {
@@ -305,6 +311,7 @@ export default function InventoryVisualization() {
       
       // Process color variants
       if (variant.color) {
+        hasSizeOrColor = true;
         if (!colorGroups[variant.color]) {
           colorGroups[variant.color] = 0;
         }
@@ -328,6 +335,14 @@ export default function InventoryVisualization() {
       // Otherwise, alphabetical
       return a.localeCompare(b);
     });
+    
+    // If no size or color attributes, create a single "Qty" entry
+    if (!hasSizeOrColor && variants.length > 0) {
+      return {
+        sizes: [{ size: "Qty", quantity: totalQuantity, special: {} }],
+        colors: []
+      };
+    }
     
     return {
       sizes: sortedSizes.map(size => ({ 
