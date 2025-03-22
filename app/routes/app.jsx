@@ -23,7 +23,7 @@ export default function App() {
           Home
         </Link>
         <Link to="/app/inventory">Inventory Analysis</Link>
-        <Link to="/app/ai-marketing">AI Marketing</Link>
+        <Link to="/app/marketing-recommendations">Marketing Recommendations</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

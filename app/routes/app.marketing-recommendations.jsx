@@ -419,7 +419,7 @@ export default function AIMarketingRecommendations() {
   }, [selectedVendor, selectedProductType, selectedLocation]);
 
   return (
-    <Page title="AI Marketing Recommendations">
+    <Page title="Marketing Recommendations">
       <Layout>
         <Layout.Section>
           <Banner
