@@ -39,6 +39,7 @@ export const loader = async ({ request }) => {
           title
           productType
           vendor
+          status
           featuredImage {
             url
             altText
@@ -108,6 +109,7 @@ export default function InventoryPlanning() {
   const [selectedVendor, setSelectedVendor] = useState('all');
   const [selectedProductType, setSelectedProductType] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState("ACTIVE");
   
   // Popover state
   const [settingsPopoverActive, setSettingsPopoverActive] = useState(false);
@@ -211,6 +213,7 @@ export default function InventoryPlanning() {
         title: product.title,
         type: product.productType,
         vendor: product.vendor,
+        status: product.status,
         imageUrl: product.featuredImage?.url,
         imageAlt: product.featuredImage?.altText || product.title,
         totalInventory: productTotalInventory,
@@ -249,16 +252,28 @@ export default function InventoryPlanning() {
       filtered = filtered.filter(product => product.type === selectedProductType);
     }
     
+    if (selectedStatus) {
+      filtered = filtered.filter(product => product.status === selectedStatus);
+    }
+    
     // Location filtering would be implemented here in a real app
     // This would require querying inventory by location
     
     setFilteredData(filtered);
-  }, [planningData, selectedVendor, selectedProductType, selectedLocation]);
+  }, [planningData, selectedVendor, selectedProductType, selectedLocation, selectedStatus]);
   
   // Extract unique values for filters
   const vendors = ['all', ...new Set(products.map(p => p.vendor).filter(Boolean))];
   const productTypes = ['all', ...new Set(products.map(p => p.productType).filter(Boolean))];
   const locationOptions = ['all', ...locations.map(location => location.name)];
+  
+  // Status options for the filter
+  const statusOptions = [
+    { value: "ACTIVE", label: "Active" },
+    { value: "ARCHIVED", label: "Archived" },
+    { value: "DRAFT", label: "Draft" },
+    { value: "", label: "All Products" }
+  ];
   
   // Get vendor and product type select options
   const vendorOptions = vendors.map(vendor => ({
@@ -387,34 +402,32 @@ export default function InventoryPlanning() {
                   <Text variant="headingMd">Filter Products</Text>
                 </InlineStack>
                 
-                <InlineStack gap="5" wrap={false}>
-                  <Box minWidth="200px">
-                    <Select
-                      label="Vendor"
-                      options={vendorOptions}
-                      value={selectedVendor}
-                      onChange={setSelectedVendor}
-                    />
-                  </Box>
-                  
-                  <Box minWidth="200px">
-                    <Select
-                      label="Product Type"
-                      options={productTypeOptions}
-                      value={selectedProductType}
-                      onChange={setSelectedProductType}
-                    />
-                  </Box>
-                  
-                  <Box minWidth="200px">
-                    <Select
-                      label="Location"
-                      options={locationSelectOptions}
-                      value={selectedLocation}
-                      onChange={setSelectedLocation}
-                    />
-                  </Box>
-                </InlineStack>
+                <LegacyStack wrap>
+                  <Select
+                    label="Status"
+                    options={statusOptions}
+                    value={selectedStatus}
+                    onChange={setSelectedStatus}
+                  />
+                  <Select
+                    label="Vendor"
+                    options={vendorOptions}
+                    value={selectedVendor}
+                    onChange={setSelectedVendor}
+                  />
+                  <Select
+                    label="Product Type"
+                    options={productTypeOptions}
+                    value={selectedProductType}
+                    onChange={setSelectedProductType}
+                  />
+                  <Select
+                    label="Location"
+                    options={locationSelectOptions}
+                    value={selectedLocation}
+                    onChange={setSelectedLocation}
+                  />
+                </LegacyStack>
               </BlockStack>
             </Box>
           </Card>
@@ -431,8 +444,8 @@ export default function InventoryPlanning() {
                     <p>Based on your current settings, no products need to be reordered.</p>
                   </Banner>
                 ) : (
-                  <BlockStack gap="16">
-                    {filteredData.filter(p => p.needsReorder).map(product => {
+                  <>
+                    {filteredData.filter(p => p.needsReorder).map((product, index) => {
                       // Get sizes that need reordering
                       const sizesToReorder = Object.entries(product.sizeReorderNeeds)
                         .filter(([_, details]) => details.reorderQuantity > 0)
@@ -441,9 +454,12 @@ export default function InventoryPlanning() {
                       if (sizesToReorder.length === 0) return null;
                       
                       return (
-                        <Box key={product.id} paddingBlockEnd="5">
-                          <Card>
-                            <Box padding="5">
+                        <div key={product.id} style={{ marginBottom: "16px" }}>
+                          <Card
+                            shadow="lg" 
+                            background={index % 2 === 0 ? "bg-surface" : "bg-surface-neutral"}
+                          >
+                            <Box padding="6">
                               <InlineStack gap="6" align="start">
                                 {product.imageUrl && (
                                   <Box width="100px">
@@ -532,10 +548,10 @@ export default function InventoryPlanning() {
                               </InlineStack>
                             </Box>
                           </Card>
-                        </Box>
+                        </div>
                       );
                     })}
-                  </BlockStack>
+                  </>
                 )}
               </BlockStack>
             </Box>
