@@ -12,6 +12,8 @@ import {
   Thumbnail,
   Tag,
   Badge,
+  RangeSlider,
+  Button,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { useState } from "react";
@@ -78,6 +80,9 @@ export default function InventoryVisualization() {
   const [selectedType, setSelectedType] = useState("");
   const [selectedVendor, setSelectedVendor] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
+  const [lowStockThreshold, setLowStockThreshold] = useState(3);
+  const [mediumStockThreshold, setMediumStockThreshold] = useState(10);
+  const [showThresholds, setShowThresholds] = useState(false);
   
   // Transform data for visualization
   const inventoryData = products.map((product) => ({
@@ -132,8 +137,8 @@ export default function InventoryVisualization() {
   // Determine tag color based on quantity
   const getTagColor = (quantity) => {
     if (quantity <= 0) return "critical";
-    if (quantity < 5) return "warning";
-    if (quantity > 10) return "success";
+    if (quantity < lowStockThreshold) return "warning";
+    if (quantity >= mediumStockThreshold) return "success";
     return "default";
   };
 
@@ -144,7 +149,54 @@ export default function InventoryVisualization() {
           <Card>
             <Box padding="4">
               <LegacyStack vertical>
-                <Text variant="headingMd">Filter Products</Text>
+                <LegacyStack alignment="space-between">
+                  <Text variant="headingMd">Filter Products</Text>
+                  <Button
+                    onClick={() => setShowThresholds(!showThresholds)}
+                    plain
+                  >
+                    Inventory Thresholds
+                  </Button>
+                </LegacyStack>
+                
+                {showThresholds && (
+                  <LegacyStack vertical spacing="4">
+                    <Text variant="headingMd">Inventory Level Thresholds</Text>
+                    
+                    <Box paddingBlockStart="4" paddingBlockEnd="4">
+                      <Text>Low Stock Threshold (Red)</Text>
+                      <RangeSlider
+                        label="Low Stock Threshold (Red)"
+                        value={lowStockThreshold}
+                        onChange={setLowStockThreshold}
+                        min={0}
+                        max={20}
+                        output
+                        labelHidden
+                      />
+                    </Box>
+                    
+                    <Box paddingBlockStart="4" paddingBlockEnd="4">
+                      <Text>Medium Stock Threshold (Yellow)</Text>
+                      <RangeSlider
+                        label="Medium Stock Threshold (Yellow)"
+                        value={mediumStockThreshold}
+                        onChange={setMediumStockThreshold}
+                        min={5}
+                        max={50}
+                        output
+                        labelHidden
+                      />
+                    </Box>
+                    
+                    <LegacyStack spacing="3">
+                      <Tag color="critical">Low: 0-{lowStockThreshold-1} items</Tag>
+                      <Tag color="warning">Medium: {lowStockThreshold}-{mediumStockThreshold-1} items</Tag>
+                      <Tag color="success">High: {mediumStockThreshold}+ items</Tag>
+                    </LegacyStack>
+                  </LegacyStack>
+                )}
+                
                 <LegacyStack wrap>
                   <Select
                     label="Product Type"
