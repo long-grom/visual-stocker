@@ -1,325 +1,356 @@
-import { useEffect } from "react";
-import { useFetcher } from "@remix-run/react";
+import { json } from "@remix-run/node";
+import { useLoaderData, Link } from "@remix-run/react";
 import {
   Page,
   Layout,
-  Text,
   Card,
-  Button,
+  Text,
   BlockStack,
   Box,
-  List,
-  Link,
+  Button,
   InlineStack,
+  LegacyStack,
+  Badge,
+  Thumbnail,
+  Banner,
+  List
 } from "@shopify/polaris";
-import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
-export const loader = async ({ request }) => {
-  await authenticate.admin(request);
-
-  return null;
+// Helper function to determine inventory level and badge status
+const getInventoryStatus = (quantity, lowThreshold = 5, mediumThreshold = 15) => {
+  if (quantity <= lowThreshold) {
+    return "critical";
+  } else if (quantity <= mediumThreshold) {
+    return "warning";
+  } else {
+    return "success";
+  }
 };
 
-export const action = async ({ request }) => {
+export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
+
+  // Fetch products with inventory data
+  const response = await admin.graphql(`
+    query {
+      products(first: 20) {
+        nodes {
+          id
+          title
+          productType
+          vendor
+          featuredImage {
+            url
+            altText
+          }
+          variants(first: 20) {
+            nodes {
+              id
+              title
+              inventoryQuantity
+              selectedOptions {
+                name
+                value
               }
             }
           }
         }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
-  const product = responseJson.data.productCreate.product;
-  const variantId = product.variants.edges[0].node.id;
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyRemixTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
       }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
-  const variantResponseJson = await variantResponse.json();
+    }
+  `);
 
-  return {
-    product: responseJson.data.productCreate.product,
-    variant: variantResponseJson.data.productVariantsBulkUpdate.productVariants,
-  };
+  const {
+    data: {
+      products: { nodes: products },
+    },
+  } = await response.json();
+
+  // Process data for dashboard display
+  let lowStockCount = 0;
+  let overstockCount = 0;
+  let balancedCount = 0;
+  let totalInventory = 0;
+  let lowStockThreshold = 5;
+  let mediumStockThreshold = 15;
+
+  // Helper for size analysis
+  const productData = products.map(product => {
+    const sizeInventory = {};
+    let productTotalInventory = 0;
+    let hasCommonSizes = false;
+    let hasFullSizeRange = false;
+    
+    // Track sizes and their inventory
+    product.variants.nodes.forEach(variant => {
+      const sizeOption = variant.selectedOptions.find(opt => opt.name.toLowerCase() === 'size');
+      if (sizeOption) {
+        const size = sizeOption.value;
+        sizeInventory[size] = variant.inventoryQuantity || 0;
+        productTotalInventory += (variant.inventoryQuantity || 0);
+        
+        // Check for common sizes (S, M, L)
+        if (['S', 'M', 'L'].includes(size) && variant.inventoryQuantity > 0) {
+          hasCommonSizes = true;
+        }
+      } else {
+        // For products without size variants
+        productTotalInventory += (variant.inventoryQuantity || 0);
+      }
+    });
+    
+    // Check if it has at least 5 units in each common size
+    const sizesWithStock = Object.entries(sizeInventory).filter(([_, qty]) => qty >= 5);
+    hasFullSizeRange = sizesWithStock.length >= 4;
+    
+    // Categorize products
+    let status = "balanced";
+    if (productTotalInventory > 30 && !hasFullSizeRange) {
+      status = "overstock";
+      overstockCount++;
+    } else if (hasCommonSizes && hasFullSizeRange && productTotalInventory > 15) {
+      status = "promotion";
+      balancedCount++;
+    } else if (productTotalInventory <= lowStockThreshold || 
+              (hasCommonSizes && Object.keys(sizeInventory).length > 2 && sizesWithStock.length < 3)) {
+      status = "lowStock";
+      lowStockCount++;
+    } else {
+      balancedCount++;
+    }
+    
+    totalInventory += productTotalInventory;
+    
+    return {
+      id: product.id,
+      title: product.title,
+      type: product.productType,
+      vendor: product.vendor,
+      imageUrl: product.featuredImage?.url,
+      imageAlt: product.featuredImage?.altText || product.title,
+      totalInventory: productTotalInventory,
+      status,
+      sizeInventory
+    };
+  });
+
+  // Find products for quick highlights
+  const topLowStock = productData
+    .filter(p => p.status === "lowStock")
+    .sort((a, b) => a.totalInventory - b.totalInventory)
+    .slice(0, 3);
+    
+  const topOpportunities = productData
+    .filter(p => p.status === "promotion")
+    .sort((a, b) => b.totalInventory - a.totalInventory)
+    .slice(0, 3);
+    
+  const topOverstock = productData
+    .filter(p => p.status === "overstock")
+    .sort((a, b) => b.totalInventory - a.totalInventory)
+    .slice(0, 3);
+
+  return json({
+    inventorySummary: {
+      total: products.length,
+      totalInventory,
+      lowStockCount,
+      overstockCount,
+      balancedCount,
+      topLowStock,
+      topOpportunities,
+      topOverstock
+    }
+  });
 };
 
 export default function Index() {
-  const fetcher = useFetcher();
-  const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
-  const productId = fetcher.data?.product?.id.replace(
-    "gid://shopify/Product/",
-    "",
-  );
-
-  useEffect(() => {
-    if (productId) {
-      shopify.toast.show("Product created");
-    }
-  }, [productId, shopify]);
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+  const { inventorySummary } = useLoaderData();
+  
+  // Format number with commas
+  const formatNumber = (num) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
 
   return (
     <Page>
-      <TitleBar title="Remix app template">
-        <button variant="primary" onClick={generateProduct}>
-          Generate a product
-        </button>
-      </TitleBar>
+      <TitleBar title="Visual Stocker Dashboard" />
       <BlockStack gap="500">
+        {/* Inventory overview section */}
         <Layout>
+          {/* First column */}
           <Layout.Section>
             <Card>
-              <BlockStack gap="500">
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">
+                  Inventory Overview
+                </Text>
+                
                 <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Congrats on creating a new Shopify app 🎉
-                  </Text>
-                  <Text variant="bodyMd" as="p">
-                    This embedded app template uses{" "}
-                    <Link
-                      url="https://shopify.dev/docs/apps/tools/app-bridge"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      App Bridge
-                    </Link>{" "}
-                    interface examples like an{" "}
-                    <Link url="/app/additional" removeUnderline>
-                      additional page in the app nav
-                    </Link>
-                    , as well as an{" "}
-                    <Link
-                      url="https://shopify.dev/docs/api/admin-graphql"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      Admin GraphQL
-                    </Link>{" "}
-                    mutation demo, to provide a starting point for app
-                    development.
-                  </Text>
+                  <InlineStack gap="500" align="space-between">
+                    <Text as="p" variant="bodyMd">
+                      Total Products:
+                    </Text>
+                    <Text as="p" variant="bodyMd" fontWeight="bold">
+                      {inventorySummary.total}
+                    </Text>
+                  </InlineStack>
+                  
+                  <InlineStack gap="500" align="space-between">
+                    <Text as="p" variant="bodyMd">
+                      Total Inventory:
+                    </Text>
+                    <Text as="p" variant="bodyMd" fontWeight="bold">
+                      {formatNumber(inventorySummary.totalInventory)} units
+                    </Text>
+                  </InlineStack>
+                  
+                  <InlineStack gap="500" align="space-between">
+                    <Text as="p" variant="bodyMd">
+                      Low Stock Products:
+                    </Text>
+                    <Badge status="critical">{inventorySummary.lowStockCount}</Badge>
+                  </InlineStack>
+                  
+                  <InlineStack gap="500" align="space-between">
+                    <Text as="p" variant="bodyMd">
+                      Overstocked Products:
+                    </Text>
+                    <Badge status="warning">{inventorySummary.overstockCount}</Badge>
+                  </InlineStack>
+                  
+                  <InlineStack gap="500" align="space-between">
+                    <Text as="p" variant="bodyMd">
+                      Balanced Inventory:
+                    </Text>
+                    <Badge status="success">{inventorySummary.balancedCount}</Badge>
+                  </InlineStack>
                 </BlockStack>
-                <BlockStack gap="200">
-                  <Text as="h3" variant="headingMd">
-                    Get started with products
-                  </Text>
-                  <Text as="p" variant="bodyMd">
-                    Generate a product with GraphQL and get the JSON output for
-                    that product. Learn more about the{" "}
-                    <Link
-                      url="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      productCreate
-                    </Link>{" "}
-                    mutation in our API references.
-                  </Text>
-                </BlockStack>
+                
                 <InlineStack gap="300">
-                  <Button loading={isLoading} onClick={generateProduct}>
-                    Generate a product
+                  <Button primary url="/app/inventory">
+                    View Detailed Analysis
                   </Button>
-                  {fetcher.data?.product && (
-                    <Button
-                      url={`shopify:admin/products/${productId}`}
-                      target="_blank"
-                      variant="plain"
-                    >
-                      View product
-                    </Button>
-                  )}
                 </InlineStack>
-                {fetcher.data?.product && (
-                  <>
-                    <Text as="h3" variant="headingMd">
-                      {" "}
-                      productCreate mutation
-                    </Text>
-                    <Box
-                      padding="400"
-                      background="bg-surface-active"
-                      borderWidth="025"
-                      borderRadius="200"
-                      borderColor="border"
-                      overflowX="scroll"
-                    >
-                      <pre style={{ margin: 0 }}>
-                        <code>
-                          {JSON.stringify(fetcher.data.product, null, 2)}
-                        </code>
-                      </pre>
-                    </Box>
-                    <Text as="h3" variant="headingMd">
-                      {" "}
-                      productVariantsBulkUpdate mutation
-                    </Text>
-                    <Box
-                      padding="400"
-                      background="bg-surface-active"
-                      borderWidth="025"
-                      borderRadius="200"
-                      borderColor="border"
-                      overflowX="scroll"
-                    >
-                      <pre style={{ margin: 0 }}>
-                        <code>
-                          {JSON.stringify(fetcher.data.variant, null, 2)}
-                        </code>
-                      </pre>
-                    </Box>
-                  </>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+          
+          {/* Second column */}
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">
+                  Marketing Opportunities
+                </Text>
+                
+                <Banner
+                  title={`${inventorySummary.topOpportunities.length} products ready for promotion`}
+                  status="success"
+                >
+                  <p>Products with balanced inventory across sizes</p>
+                </Banner>
+                
+                <Banner
+                  title={`${inventorySummary.topOverstock.length} overstocked products`}
+                  status="warning"
+                >
+                  <p>Products with high inventory in certain sizes</p>
+                </Banner>
+                
+                <InlineStack gap="300">
+                  <Button primary url="/app/marketing">
+                    View Marketing Recommendations
+                  </Button>
+                </InlineStack>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        </Layout>
+        
+        {/* Highlight sections */}
+        <Layout>
+          {/* Low stock highlights */}
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">
+                  Low Stock Items
+                </Text>
+                
+                {inventorySummary.topLowStock.length > 0 ? (
+                  <BlockStack gap="400">
+                    {inventorySummary.topLowStock.map(product => (
+                      <InlineStack key={product.id} gap="400" align="center">
+                        {product.imageUrl && (
+                          <Thumbnail
+                            source={product.imageUrl}
+                            alt={product.imageAlt}
+                            size="small"
+                          />
+                        )}
+                        <BlockStack gap="100">
+                          <Text variant="bodyMd" fontWeight="bold">
+                            {product.title}
+                          </Text>
+                          <Text variant="bodySm">
+                            Total inventory: {product.totalInventory} units
+                          </Text>
+                        </BlockStack>
+                        <Badge status="critical">Low Stock</Badge>
+                      </InlineStack>
+                    ))}
+                    <Button plain url="/app/inventory">
+                      View all low stock items →
+                    </Button>
+                  </BlockStack>
+                ) : (
+                  <Text variant="bodyMd">No low stock items found.</Text>
                 )}
               </BlockStack>
             </Card>
           </Layout.Section>
-          <Layout.Section variant="oneThird">
-            <BlockStack gap="500">
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    App template specs
-                  </Text>
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Framework
-                      </Text>
-                      <Link
-                        url="https://remix.run"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        Remix
-                      </Link>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Database
-                      </Text>
-                      <Link
-                        url="https://www.prisma.io/"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        Prisma
-                      </Link>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Interface
-                      </Text>
-                      <span>
-                        <Link
-                          url="https://polaris.shopify.com"
-                          target="_blank"
-                          removeUnderline
-                        >
-                          Polaris
-                        </Link>
-                        {", "}
-                        <Link
-                          url="https://shopify.dev/docs/apps/tools/app-bridge"
-                          target="_blank"
-                          removeUnderline
-                        >
-                          App Bridge
-                        </Link>
-                      </span>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        API
-                      </Text>
-                      <Link
-                        url="https://shopify.dev/docs/api/admin-graphql"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        GraphQL API
-                      </Link>
-                    </InlineStack>
+          
+          {/* Promotion opportunities */}
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">
+                  Promotion Opportunities
+                </Text>
+                
+                {inventorySummary.topOpportunities.length > 0 ? (
+                  <BlockStack gap="400">
+                    {inventorySummary.topOpportunities.map(product => (
+                      <InlineStack key={product.id} gap="400" align="center">
+                        {product.imageUrl && (
+                          <Thumbnail
+                            source={product.imageUrl}
+                            alt={product.imageAlt}
+                            size="small"
+                          />
+                        )}
+                        <BlockStack gap="100">
+                          <Text variant="bodyMd" fontWeight="bold">
+                            {product.title}
+                          </Text>
+                          <Text variant="bodySm">
+                            Inventory across sizes: {product.totalInventory} units
+                          </Text>
+                        </BlockStack>
+                        <Badge status="success">Ready to Promote</Badge>
+                      </InlineStack>
+                    ))}
+                    <Button plain url="/app/marketing">
+                      View all promotion opportunities →
+                    </Button>
                   </BlockStack>
-                </BlockStack>
-              </Card>
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Next steps
-                  </Text>
-                  <List>
-                    <List.Item>
-                      Build an{" "}
-                      <Link
-                        url="https://shopify.dev/docs/apps/getting-started/build-app-example"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        {" "}
-                        example app
-                      </Link>{" "}
-                      to get started
-                    </List.Item>
-                    <List.Item>
-                      Explore Shopify’s API with{" "}
-                      <Link
-                        url="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        GraphiQL
-                      </Link>
-                    </List.Item>
-                  </List>
-                </BlockStack>
-              </Card>
-            </BlockStack>
+                ) : (
+                  <Text variant="bodyMd">No promotion opportunities found.</Text>
+                )}
+              </BlockStack>
+            </Card>
           </Layout.Section>
         </Layout>
       </BlockStack>
