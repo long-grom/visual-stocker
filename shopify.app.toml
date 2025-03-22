@@ -1,0 +1,28 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "cd5e3aff5c6dfc771175e6aa53cbfd6c"
+application_url = "https://traveling-dried-looked-fascinating.trycloudflare.com"
+embedded = true
+name = "Vissy"
+handle = "vissy"
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2025-01"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products"
+
+[auth]
+redirect_urls = [
+  "https://traveling-dried-looked-fascinating.trycloudflare.com/auth/callback",
+  "https://traveling-dried-looked-fascinating.trycloudflare.com/auth/shopify/callback",
+  "https://traveling-dried-looked-fascinating.trycloudflare.com/api/auth/callback"
+]
+
+[pos]
+embedded = false
