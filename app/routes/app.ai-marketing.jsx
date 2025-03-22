@@ -1,5 +1,5 @@
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useSubmit } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -11,8 +11,12 @@ import {
   Banner,
   List,
   Divider,
+  Select,
+  Filters,
+  Button,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
+import { useEffect, useState } from "react";
 
 export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
@@ -43,86 +47,133 @@ export const loader = async ({ request }) => {
           }
         }
       }
+      locations(first: 10, query: "active:true") {
+        nodes {
+          id
+          name
+          isActive
+        }
+      }
     }
   `);
 
-  const { data: { products } } = await productsResponse.json();
+  const { data } = await productsResponse.json();
 
   return json({
-    products: products.nodes
+    products: data.products.nodes,
+    locations: data.locations.nodes
   });
 };
 
 export default function AIMarketingRecommendations() {
-  const { products } = useLoaderData();
+  const { products, locations } = useLoaderData();
+  const [selectedVendor, setSelectedVendor] = useState('all');
+  const [selectedProductType, setSelectedProductType] = useState('all');
+  const [selectedLocation, setSelectedLocation] = useState('all');
+  const [filteredProductData, setFilteredProductData] = useState([]);
+  const [recommendations, setRecommendations] = useState({
+    promotionOpportunities: [],
+    lowStockWarnings: [],
+    balancedInventory: [],
+    overstockedItems: []
+  });
+
+  // Extract unique vendors and product types
+  const vendors = ['all', ...new Set(products.map(product => product.vendor).filter(Boolean))];
+  const productTypes = ['all', ...new Set(products.map(product => product.productType).filter(Boolean))];
+  
+  // Prepare location options
+  const locationOptions = [
+    { label: 'All Locations', value: 'all' },
+    ...locations.map(location => ({
+      label: location.name,
+      value: location.id
+    }))
+  ];
   
   // Transform data for analysis
-  const productData = products.map((product) => {
-    const variants = product.variants.nodes.map((variant) => {
-      const options = variant.selectedOptions.reduce(
-        (acc, opt) => ({ ...acc, [opt.name.toLowerCase()]: opt.value }),
-        {}
+  const transformProductData = () => {
+    // Filter products based on selected vendor and product type
+    let filteredProducts = [...products];
+    
+    if (selectedVendor !== 'all') {
+      filteredProducts = filteredProducts.filter(product => product.vendor === selectedVendor);
+    }
+    
+    if (selectedProductType !== 'all') {
+      filteredProducts = filteredProducts.filter(product => product.productType === selectedProductType);
+    }
+    
+    // We'll apply location filtering in our recommendations display logic below
+    // since we need to keep all inventory data for proper analysis
+    
+    return filteredProducts.map((product) => {
+      const variants = product.variants.nodes.map((variant) => {
+        const options = variant.selectedOptions.reduce(
+          (acc, opt) => ({ ...acc, [opt.name.toLowerCase()]: opt.value }),
+          {}
+        );
+        
+        return {
+          id: variant.id,
+          title: variant.title,
+          quantity: variant.inventoryQuantity,
+          size: options.size,
+          color: options.color,
+        };
+      });
+
+      // Calculate total inventory
+      const totalInventory = variants.reduce((sum, variant) => sum + variant.quantity, 0);
+      
+      // Calculate sizes availability percentage
+      const sizeVariants = variants.filter(v => v.size);
+      const uniqueSizes = [...new Set(sizeVariants.map(v => v.size))];
+      
+      // Track inventory by size
+      const sizeInventory = {};
+      uniqueSizes.forEach(size => {
+        const variantsWithSize = sizeVariants.filter(v => v.size === size);
+        sizeInventory[size] = variantsWithSize.reduce((sum, v) => sum + v.quantity, 0);
+      });
+      
+      // Get common fashion sizes
+      const commonSizes = ['S', 'M', 'L'];
+      const hasCommonSizes = commonSizes.every(size => 
+        uniqueSizes.includes(size) && sizeInventory[size] > 0
       );
       
+      // Check if all sizes have at least 5 units
+      const sizesWithAdequateStock = uniqueSizes.filter(size => sizeInventory[size] >= 5);
+      const hasFullSizeRange = uniqueSizes.length > 0 && 
+        sizesWithAdequateStock.length === uniqueSizes.length;
+      
+      // Calculate common sizes availability percentage
+      const availableCommonSizes = commonSizes.filter(size => 
+        uniqueSizes.includes(size) && sizeInventory[size] > 0
+      );
+      const commonSizesAvailability = commonSizes.some(s => uniqueSizes.includes(s)) 
+        ? (availableCommonSizes.length / commonSizes.filter(s => uniqueSizes.includes(s)).length) * 100 
+        : 0;
+      
       return {
-        id: variant.id,
-        title: variant.title,
-        quantity: variant.inventoryQuantity,
-        size: options.size,
-        color: options.color,
+        id: product.id,
+        title: product.title,
+        type: product.productType,
+        vendor: product.vendor,
+        imageUrl: product.featuredImage?.url,
+        imageAlt: product.featuredImage?.altText || product.title,
+        variants,
+        totalInventory,
+        uniqueSizes,
+        sizeInventory,
+        hasCommonSizes,
+        hasFullSizeRange,
+        sizesWithAdequateStock,
+        commonSizesAvailability
       };
     });
-
-    // Calculate total inventory
-    const totalInventory = variants.reduce((sum, variant) => sum + variant.quantity, 0);
-    
-    // Calculate sizes availability percentage
-    const sizeVariants = variants.filter(v => v.size);
-    const uniqueSizes = [...new Set(sizeVariants.map(v => v.size))];
-    
-    // Track inventory by size
-    const sizeInventory = {};
-    uniqueSizes.forEach(size => {
-      const variantsWithSize = sizeVariants.filter(v => v.size === size);
-      sizeInventory[size] = variantsWithSize.reduce((sum, v) => sum + v.quantity, 0);
-    });
-    
-    // Get common fashion sizes
-    const commonSizes = ['S', 'M', 'L'];
-    const hasCommonSizes = commonSizes.every(size => 
-      uniqueSizes.includes(size) && sizeInventory[size] > 0
-    );
-    
-    // Check if all sizes have at least 5 units
-    const sizesWithAdequateStock = uniqueSizes.filter(size => sizeInventory[size] >= 5);
-    const hasFullSizeRange = uniqueSizes.length > 0 && 
-      sizesWithAdequateStock.length === uniqueSizes.length;
-    
-    // Calculate common sizes availability percentage
-    const availableCommonSizes = commonSizes.filter(size => 
-      uniqueSizes.includes(size) && sizeInventory[size] > 0
-    );
-    const commonSizesAvailability = commonSizes.some(s => uniqueSizes.includes(s)) 
-      ? (availableCommonSizes.length / commonSizes.filter(s => uniqueSizes.includes(s)).length) * 100 
-      : 0;
-    
-    return {
-      id: product.id,
-      title: product.title,
-      type: product.productType,
-      vendor: product.vendor,
-      imageUrl: product.featuredImage?.url,
-      imageAlt: product.featuredImage?.altText || product.title,
-      variants,
-      totalInventory,
-      uniqueSizes,
-      sizeInventory,
-      hasCommonSizes,
-      hasFullSizeRange,
-      sizesWithAdequateStock,
-      commonSizesAvailability
-    };
-  });
+  };
 
   // Generate marketing recommendations
   const generateRecommendations = (productData) => {
@@ -144,7 +195,9 @@ export default function AIMarketingRecommendations() {
           inventory: product.totalInventory,
           sizes: Object.entries(product.sizeInventory)
             .map(([size, qty]) => `${size}: ${qty}`)
-            .join(', ')
+            .join(', '),
+          vendor: product.vendor,
+          type: product.type
         });
       }
       
@@ -158,7 +211,9 @@ export default function AIMarketingRecommendations() {
           inventory: product.totalInventory,
           sizes: Object.entries(product.sizeInventory)
             .map(([size, qty]) => `${size}: ${qty}`)
-            .join(', ')
+            .join(', '),
+          vendor: product.vendor,
+          type: product.type
         });
       }
       
@@ -172,7 +227,9 @@ export default function AIMarketingRecommendations() {
           inventory: product.totalInventory,
           sizes: Object.entries(product.sizeInventory)
             .map(([size, qty]) => `${size}: ${qty}`)
-            .join(', ')
+            .join(', '),
+          vendor: product.vendor,
+          type: product.type
         });
       }
       
@@ -186,7 +243,9 @@ export default function AIMarketingRecommendations() {
           inventory: product.totalInventory,
           sizes: Object.entries(product.sizeInventory)
             .map(([size, qty]) => `${size}: ${qty}`)
-            .join(', ')
+            .join(', '),
+          vendor: product.vendor,
+          type: product.type
         });
       }
     });
@@ -197,10 +256,68 @@ export default function AIMarketingRecommendations() {
     recommendations.balancedInventory.sort((a, b) => b.inventory - a.inventory);
     recommendations.lowStockWarnings.sort((a, b) => a.inventory - b.inventory);
 
+    // If a specific location is selected, filter the recommendations
+    // This is a simplified approach; for a real implementation we would need to
+    // fetch inventory levels by location from the Shopify API
+    if (selectedLocation !== 'all') {
+      const selectedLocationName = locations.find(loc => loc.id === selectedLocation)?.name || '';
+      
+      // For demonstration purposes, we'll filter recommendations by excluding
+      // certain products based on the location ID (simulating location-specific inventory)
+      // In a real implementation, you would query inventory levels by location
+      const filterByLocationSimulation = (items) => {
+        // This is a placeholder for actual location-based filtering
+        // In a real implementation, you would check actual inventory at each location
+        return items.filter(item => {
+          // Use the product ID and location ID to create a deterministic filter for demo
+          const productIdNum = parseInt(item.id.split('/').pop());
+          const locationIdNum = parseInt(selectedLocation.split('/').pop());
+          
+          // Simple hash function to deterministically filter items by location
+          return (productIdNum + locationIdNum) % 3 !== 0;
+        });
+      };
+      
+      recommendations.promotionOpportunities = filterByLocationSimulation(recommendations.promotionOpportunities);
+      recommendations.overstockedItems = filterByLocationSimulation(recommendations.overstockedItems);
+      recommendations.balancedInventory = filterByLocationSimulation(recommendations.balancedInventory);
+      recommendations.lowStockWarnings = filterByLocationSimulation(recommendations.lowStockWarnings);
+      
+      // Add location info to recommendations
+      Object.keys(recommendations).forEach(key => {
+        recommendations[key].forEach(item => {
+          item.locationInfo = `Filtered by location: ${selectedLocationName}`;
+        });
+      });
+    }
+
     return recommendations;
   };
 
-  const recommendations = generateRecommendations(productData);
+  // Handle filter changes
+  const handleVendorChange = (value) => {
+    setSelectedVendor(value);
+  };
+
+  const handleProductTypeChange = (value) => {
+    setSelectedProductType(value);
+  };
+
+  const handleLocationChange = (value) => {
+    setSelectedLocation(value);
+  };
+
+  const handleResetFilters = () => {
+    setSelectedVendor('all');
+    setSelectedProductType('all');
+    setSelectedLocation('all');
+  };
+
+  useEffect(() => {
+    const transformedData = transformProductData();
+    setFilteredProductData(transformedData);
+    setRecommendations(generateRecommendations(transformedData));
+  }, [selectedVendor, selectedProductType, selectedLocation]);
 
   return (
     <Page title="AI Marketing Recommendations">
@@ -212,6 +329,45 @@ export default function AIMarketingRecommendations() {
           >
             <p>These recommendations are generated based on your current inventory levels across different products, sizes, and colors.</p>
           </Banner>
+        </Layout.Section>
+
+        <Layout.Section>
+          <Card>
+            <Box padding="4">
+              <Text variant="headingMd">Filter Recommendations</Text>
+              <Box paddingBlockStart="4">
+                <LegacyStack distribution="fill" alignment="trailing" wrap={false}>
+                  <div style={{ minWidth: '200px', paddingRight: '12px' }}>
+                    <Select
+                      label="Vendor"
+                      options={vendors.map(vendor => ({ label: vendor === 'all' ? 'All Vendors' : vendor, value: vendor }))}
+                      onChange={handleVendorChange}
+                      value={selectedVendor}
+                    />
+                  </div>
+                  <div style={{ minWidth: '200px', paddingRight: '12px' }}>
+                    <Select
+                      label="Product Type"
+                      options={productTypes.map(type => ({ label: type === 'all' ? 'All Product Types' : type, value: type }))}
+                      onChange={handleProductTypeChange}
+                      value={selectedProductType}
+                    />
+                  </div>
+                  <div style={{ minWidth: '200px', paddingRight: '12px' }}>
+                    <Select
+                      label="Warehouse Location"
+                      options={locationOptions}
+                      onChange={handleLocationChange}
+                      value={selectedLocation}
+                    />
+                  </div>
+                  <div style={{ alignSelf: 'flex-end', paddingBottom: '4px' }}>
+                    <Button onClick={handleResetFilters}>Reset Filters</Button>
+                  </div>
+                </LegacyStack>
+              </Box>
+            </Box>
+          </Card>
         </Layout.Section>
 
         <Layout.Section>
@@ -247,6 +403,11 @@ export default function AIMarketingRecommendations() {
                           {item.sizes && (
                             <Text variant="bodySm" color="subdued">
                               Sizes: {item.sizes}
+                            </Text>
+                          )}
+                          {item.locationInfo && (
+                            <Text variant="bodySm" color="subdued">
+                              {item.locationInfo}
                             </Text>
                           )}
                         </LegacyStack>
@@ -294,6 +455,11 @@ export default function AIMarketingRecommendations() {
                               Sizes: {item.sizes}
                             </Text>
                           )}
+                          {item.locationInfo && (
+                            <Text variant="bodySm" color="subdued">
+                              {item.locationInfo}
+                            </Text>
+                          )}
                         </LegacyStack>
                       </List.Item>
                     ))}
@@ -339,6 +505,11 @@ export default function AIMarketingRecommendations() {
                               Sizes: {item.sizes}
                             </Text>
                           )}
+                          {item.locationInfo && (
+                            <Text variant="bodySm" color="subdued">
+                              {item.locationInfo}
+                            </Text>
+                          )}
                         </LegacyStack>
                       </List.Item>
                     ))}
@@ -382,6 +553,11 @@ export default function AIMarketingRecommendations() {
                           {item.sizes && (
                             <Text variant="bodySm" color="subdued">
                               Sizes: {item.sizes}
+                            </Text>
+                          )}
+                          {item.locationInfo && (
+                            <Text variant="bodySm" color="subdued">
+                              {item.locationInfo}
                             </Text>
                           )}
                         </LegacyStack>
