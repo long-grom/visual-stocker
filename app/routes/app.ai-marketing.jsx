@@ -79,9 +79,24 @@ export default function AIMarketingRecommendations() {
     overstockedItems: []
   });
   
-  // Inventory threshold state
+  // Inventory threshold state - with defaults that will be overridden if stored values exist
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [mediumStockThreshold, setMediumStockThreshold] = useState(15);
+
+  // Load threshold values from localStorage (if available)
+  useEffect(() => {
+    // Get stored values on component mount
+    const storedLowThreshold = localStorage.getItem('lowStockThreshold');
+    const storedMediumThreshold = localStorage.getItem('mediumStockThreshold');
+    
+    if (storedLowThreshold) {
+      setLowStockThreshold(parseInt(storedLowThreshold, 10));
+    }
+    
+    if (storedMediumThreshold) {
+      setMediumStockThreshold(parseInt(storedMediumThreshold, 10));
+    }
+  }, []);
 
   // Function to get tag color based on inventory level
   const getTagColor = (quantity) => {
@@ -91,6 +106,53 @@ export default function AIMarketingRecommendations() {
       return 'warning';  // Yellow/Orange
     } else {
       return 'success';  // Green
+    }
+  };
+
+  // Get tag style based on inventory level - custom styling to match inventory page
+  const getTagStyles = (quantity) => {
+    if (quantity <= lowStockThreshold) {
+      return {
+        backgroundColor: '#FAD4D4',
+        color: '#D72C0D',
+        padding: '1px 4px',
+        borderRadius: '6px',
+        fontWeight: '500',
+        display: 'inline-block',
+        textAlign: 'center',
+        boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+        border: '1px solid #FFCECB',
+        margin: '1px',
+        minWidth: '50px'
+      };
+    } else if (quantity <= mediumStockThreshold) {
+      return {
+        backgroundColor: '#FFF4E5',
+        color: '#B98900',
+        padding: '1px 4px',
+        borderRadius: '6px',
+        fontWeight: '500',
+        display: 'inline-block',
+        textAlign: 'center',
+        boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+        border: '1px solid #FFE3AC',
+        margin: '1px',
+        minWidth: '50px'
+      };
+    } else {
+      return {
+        backgroundColor: '#E3F1DF',
+        color: '#108043',
+        padding: '1px 4px',
+        borderRadius: '6px',
+        fontWeight: '500',
+        display: 'inline-block',
+        textAlign: 'center',
+        boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+        border: '1px solid #BBE5B3',
+        margin: '1px',
+        minWidth: '50px'
+      };
     }
   };
 
@@ -107,9 +169,9 @@ export default function AIMarketingRecommendations() {
     return (
       <LegacyStack spacing="tight" wrap={true}>
         {sizeEntries.map((entry, index) => (
-          <Badge key={index} status={getTagColor(entry.quantity)}>
+          <div key={index} style={getTagStyles(entry.quantity)}>
             {entry.size}: {entry.quantity}
-          </Badge>
+          </div>
         ))}
       </LegacyStack>
     );
