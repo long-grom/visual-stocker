@@ -134,12 +134,216 @@ export default function InventoryVisualization() {
     return hasMatchingVariant;
   });
 
-  // Determine tag color based on quantity
-  const getTagColor = (quantity) => {
-    if (quantity <= 0) return "critical";
-    if (quantity < lowStockThreshold) return "warning";
-    if (quantity >= mediumStockThreshold) return "success";
-    return "default";
+  // Determine tag color based on quantity and return styles
+  const getTagStyles = (quantity) => {
+    if (quantity <= 0) {
+      return {
+        backgroundColor: '#FAD4D4',
+        color: '#D72C0D',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        fontWeight: '500',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '65px',
+        height: '28px',
+        textAlign: 'center',
+        boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+        border: '1px solid #FFCECB',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        boxSizing: 'border-box',
+        margin: '0 auto'
+      };
+    } 
+    if (quantity < lowStockThreshold) {
+      return {
+        backgroundColor: '#FFF4E5',
+        color: '#B98900',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        fontWeight: '500',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '65px',
+        height: '28px',
+        textAlign: 'center',
+        boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+        border: '1px solid #FFE3AC',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        boxSizing: 'border-box',
+        margin: '0 auto'
+      };
+    } 
+    if (quantity >= mediumStockThreshold) {
+      return {
+        backgroundColor: '#E3F1DF',
+        color: '#108043',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        fontWeight: '500',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '65px',
+        height: '28px',
+        textAlign: 'center',
+        boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+        border: '1px solid #BBE5B3',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        boxSizing: 'border-box',
+        margin: '0 auto'
+      };
+    }
+    // Medium stock (between low and medium threshold) 
+    return {
+      backgroundColor: '#FFF4E5', // Medium: yellow
+      color: '#B98900',
+      padding: '4px 8px',
+      borderRadius: '6px',
+      fontWeight: '500',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '65px',
+      height: '28px',
+      textAlign: 'center',
+      boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+      border: '1px solid #FFE3AC',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      boxSizing: 'border-box',
+      margin: '0 auto'
+    };
+  };
+
+  // Get the styled sample tags for thresholds
+  const getLowStockStyle = {
+    backgroundColor: '#FAD4D4',
+    color: '#D72C0D',
+    padding: '4px 8px',
+    borderRadius: '6px',
+    fontWeight: '500',
+    display: 'inline-block',
+    margin: '2px',
+    width: '120px',
+    textAlign: 'center',
+    boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+    border: '1px solid #FFCECB'
+  };
+
+  const getMediumStockStyle = {
+    backgroundColor: '#FFF4E5',
+    color: '#B98900',
+    padding: '4px 8px',
+    borderRadius: '6px',
+    fontWeight: '500',
+    display: 'inline-block',
+    margin: '2px',
+    width: '120px',
+    textAlign: 'center',
+    boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+    border: '1px solid #FFE3AC'
+  };
+
+  const getHighStockStyle = {
+    backgroundColor: '#E3F1DF',
+    color: '#108043',
+    padding: '4px 8px',
+    borderRadius: '6px',
+    fontWeight: '500',
+    display: 'inline-block',
+    margin: '2px',
+    width: '120px',
+    textAlign: 'center',
+    boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
+    border: '1px solid #BBE5B3'
+  };
+
+  // Group variants by size and color 
+  const groupVariantsByAttributes = (variants) => {
+    // Standard sizes in order from smallest to largest
+    const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+    
+    // Group by size first
+    const sizeGroups = {};
+    const colorGroups = {};
+    
+    // Process size variants
+    variants.forEach(variant => {
+      if (variant.size) {
+        // For sizes, check if it's a standard size or a specialized size (like "XS (Kids)")
+        let key = variant.size;
+        if (key.includes('(')) {
+          // For specialized sizes like "XS (Kids)", use a special format
+          key = variant.size.split('(')[0].trim();
+          const specialType = variant.size.match(/\((.*)\)/)[1];
+          if (!sizeGroups[key]) {
+            sizeGroups[key] = {
+              special: {},
+              quantity: 0
+            };
+          }
+          if (!sizeGroups[key].special[specialType]) {
+            sizeGroups[key].special[specialType] = 0;
+          }
+          sizeGroups[key].special[specialType] += variant.quantity;
+        } else {
+          // For standard sizes
+          if (!sizeGroups[key]) {
+            sizeGroups[key] = {
+              quantity: 0,
+              special: {}
+            };
+          }
+          sizeGroups[key].quantity += variant.quantity;
+        }
+      }
+      
+      // Process color variants
+      if (variant.color) {
+        if (!colorGroups[variant.color]) {
+          colorGroups[variant.color] = 0;
+        }
+        colorGroups[variant.color] += variant.quantity;
+      }
+    });
+    
+    // Sort sizes according to standard order
+    const sortedSizes = Object.keys(sizeGroups).sort((a, b) => {
+      const indexA = sizeOrder.indexOf(a);
+      const indexB = sizeOrder.indexOf(b);
+      
+      // If both sizes are in our order list, use that order
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // If only one is in the order list, prioritize it
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      
+      // Otherwise, alphabetical
+      return a.localeCompare(b);
+    });
+    
+    return {
+      sizes: sortedSizes.map(size => ({ 
+        size, 
+        ...sizeGroups[size] 
+      })),
+      colors: Object.entries(colorGroups).map(([color, quantity]) => ({ 
+        color, 
+        quantity 
+      }))
+    };
   };
 
   return (
@@ -190,9 +394,15 @@ export default function InventoryVisualization() {
                     </Box>
                     
                     <LegacyStack spacing="3">
-                      <Tag color="critical">Low: 0-{lowStockThreshold-1} items</Tag>
-                      <Tag color="warning">Medium: {lowStockThreshold}-{mediumStockThreshold-1} items</Tag>
-                      <Tag color="success">High: {mediumStockThreshold}+ items</Tag>
+                      <div style={getLowStockStyle}>
+                        Low: 0-{lowStockThreshold-1} items
+                      </div>
+                      <div style={getMediumStockStyle}>
+                        Medium: {lowStockThreshold}-{mediumStockThreshold-1} items
+                      </div>
+                      <div style={getHighStockStyle}>
+                        High: {mediumStockThreshold}+ items
+                      </div>
                     </LegacyStack>
                   </LegacyStack>
                 )}
@@ -275,18 +485,41 @@ export default function InventoryVisualization() {
                           </Badge>
                         )}
                       </LegacyStack>
-                      <LegacyStack wrap>
-                        {product.variants.map((variant) => {
-                          const quantity = variant.quantity;
-                          const tagColor = getTagColor(quantity);
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(4, 65px)', 
+                        gap: '5px',
+                        justifyContent: 'center',
+                        margin: '0 auto',
+                        rowGap: '5px'
+                      }}>
+                        {groupVariantsByAttributes(product.variants).sizes.map(({ size, quantity, special }, index) => {
+                          const hasSpecial = Object.keys(special).length > 0;
+                          const tagStyles = getTagStyles(quantity);
                           
                           return (
-                            <Tag key={variant.id} color={tagColor}>
-                              {`${variant.size || ''} ${variant.color || ''}: ${quantity}`}
-                            </Tag>
+                            <div key={size} style={{ 
+                              width: '65px', 
+                              padding: '0', 
+                              margin: '0',
+                              boxSizing: 'border-box'
+                            }}>
+                              <div style={tagStyles}>
+                                <span><strong>{size}</strong>: {quantity}</span>
+                              </div>
+                              
+                              {hasSpecial && Object.entries(special).map(([specialType, specialQuantity], specIndex) => (
+                                <div 
+                                  key={`${size}${specialType}`} 
+                                  style={{...getTagStyles(specialQuantity), marginTop: '5px'}}
+                                >
+                                  <span><strong>{size}</strong>: {specialQuantity}</span>
+                                </div>
+                              ))}
+                            </div>
                           );
                         })}
-                      </LegacyStack>
+                      </div>
                     </LegacyStack>
                   </LegacyStack>
                 </Box>
