@@ -541,68 +541,6 @@ export default function InventoryPlanning() {
             </Box>
           </Card>
         </Layout.Section>
-        
-        <Layout.Section>
-          <Card>
-            <Box padding="4">
-              <BlockStack gap="4">
-                <Text variant="headingLg">Inventory Status</Text>
-                
-                <BlockStack gap="4">
-                  {filteredData
-                    .filter(p => !p.needsReorder)
-                    .slice(0, 5)
-                    .map(product => {
-                      // Find the earliest out-of-stock date among sizes
-                      const daysUntilOutOfStock = Object.values(product.daysUntilOutOfStock);
-                      const earliestOutOfStock = daysUntilOutOfStock.length > 0
-                        ? Math.min(...daysUntilOutOfStock)
-                        : 999;
-                        
-                      const outOfStockDate = new Date(today);
-                      outOfStockDate.setDate(outOfStockDate.getDate() + earliestOutOfStock);
-                      
-                      return (
-                        <InlineStack key={product.id} gap="5" align="center">
-                          {product.imageUrl && (
-                            <Thumbnail
-                              source={product.imageUrl}
-                              alt={product.imageAlt}
-                              size="small"
-                            />
-                          )}
-                          <BlockStack gap="1" flexible>
-                            <Text variant="bodyMd" fontWeight="bold">
-                              {product.title}
-                            </Text>
-                            <Text variant="bodySm">
-                              Current Inventory: {product.totalInventory} units
-                            </Text>
-                          </BlockStack>
-                          <Badge status="success">
-                            Well Stocked
-                          </Badge>
-                          <Text>
-                            {earliestOutOfStock < 999 
-                              ? `${earliestOutOfStock} days until reorder needed` 
-                              : 'No reorder needed soon'}
-                          </Text>
-                        </InlineStack>
-                      );
-                    })}
-                  
-                  {filteredData.filter(p => !p.needsReorder).length > 5 && (
-                    <Button plain>View all well-stocked items ({filteredData.filter(p => !p.needsReorder).length})</Button>
-                  )}
-                  
-                  {filteredData.filter(p => !p.needsReorder).length === 0 && (
-                    <Text>No well-stocked items found.</Text>
-                  )}
-                </BlockStack>
-              </BlockStack>
-            </Box>
-          </Card>
-        </Layout.Section>
       </Layout>
     </Page>
   );

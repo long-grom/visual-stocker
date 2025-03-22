@@ -16,7 +16,7 @@ import {
   Button,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
@@ -45,6 +45,7 @@ export const loader = async ({ request }) => {
           title
           productType
           vendor
+          status
           featuredImage {
             url
             altText
@@ -75,11 +76,10 @@ export const loader = async ({ request }) => {
 
 export default function InventoryVisualization() {
   const { products, locations } = useLoaderData();
-  const [selectedSize, setSelectedSize] = useState("");
-  const [selectedColor, setSelectedColor] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedVendor, setSelectedVendor] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("ACTIVE");
   const [lowStockThreshold, setLowStockThreshold] = useState(3);
   const [mediumStockThreshold, setMediumStockThreshold] = useState(10);
   const [showThresholds, setShowThresholds] = useState(false);
@@ -90,6 +90,7 @@ export default function InventoryVisualization() {
     title: product.title,
     type: product.productType,
     vendor: product.vendor,
+    status: product.status,
     imageUrl: product.featuredImage?.url,
     imageAlt: product.featuredImage?.altText || product.title,
     variants: product.variants.nodes.map((variant) => {
@@ -108,30 +109,24 @@ export default function InventoryVisualization() {
   }));
 
   // Get unique values for filters
-  const sizes = [...new Set(products.flatMap(p => p.variants.nodes.flatMap(v => 
-    v.selectedOptions.filter(o => o.name.toLowerCase() === 'size').map(o => o.value)
-  )))];
-  const colors = [...new Set(products.flatMap(p => p.variants.nodes.flatMap(v => 
-    v.selectedOptions.filter(o => o.name.toLowerCase() === 'color').map(o => o.value)
-  )))];
   const types = [...new Set(products.map(p => p.productType).filter(Boolean))];
   const vendors = [...new Set(products.map(p => p.vendor).filter(Boolean))];
   const locationOptions = locations
     .filter(l => l.isActive)
     .map(l => ({ value: l.id, label: l.name }));
+  const statusOptions = [
+    { value: "ACTIVE", label: "Active" },
+    { value: "ARCHIVED", label: "Archived" },
+    { value: "DRAFT", label: "Draft" },
+    { value: "", label: "All Products" }
+  ];
 
   // Filter products
   const filteredProducts = inventoryData.filter((product) => {
+    if (selectedStatus && product.status !== selectedStatus) return false;
     if (selectedType && product.type !== selectedType) return false;
     if (selectedVendor && product.vendor !== selectedVendor) return false;
-    
-    const hasMatchingVariant = product.variants.some(variant => {
-      if (selectedSize && variant.size !== selectedSize) return false;
-      if (selectedColor && variant.color !== selectedColor) return false;
-      return true;
-    });
-    
-    return hasMatchingVariant;
+    return true;
   });
 
   // Determine tag color based on quantity and return styles
@@ -346,6 +341,12 @@ export default function InventoryVisualization() {
     };
   };
 
+  useEffect(() => {
+    // Save threshold values to localStorage whenever they change
+    localStorage.setItem('lowStockThreshold', lowStockThreshold.toString());
+    localStorage.setItem('mediumStockThreshold', mediumStockThreshold.toString());
+  }, [lowStockThreshold, mediumStockThreshold]);
+
   return (
     <Page title="Inventory Collection View">
       <Layout>
@@ -409,6 +410,12 @@ export default function InventoryVisualization() {
                 
                 <LegacyStack wrap>
                   <Select
+                    label="Status"
+                    options={statusOptions}
+                    onChange={setSelectedStatus}
+                    value={selectedStatus}
+                  />
+                  <Select
                     label="Product Type"
                     options={[
                       { label: "All Types", value: "" },
@@ -425,24 +432,6 @@ export default function InventoryVisualization() {
                     ]}
                     onChange={setSelectedVendor}
                     value={selectedVendor}
-                  />
-                  <Select
-                    label="Size"
-                    options={[
-                      { label: "All Sizes", value: "" },
-                      ...sizes.map((size) => ({ label: size, value: size })),
-                    ]}
-                    onChange={setSelectedSize}
-                    value={selectedSize}
-                  />
-                  <Select
-                    label="Color"
-                    options={[
-                      { label: "All Colors", value: "" },
-                      ...colors.map((color) => ({ label: color, value: color })),
-                    ]}
-                    onChange={setSelectedColor}
-                    value={selectedColor}
                   />
                   <Select
                     label="Warehouse Location"
@@ -485,6 +474,7 @@ export default function InventoryVisualization() {
                           </Badge>
                         )}
                       </LegacyStack>
+                      
                       <div style={{ 
                         display: 'grid', 
                         gridTemplateColumns: 'repeat(4, 65px)', 
