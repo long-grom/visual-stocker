@@ -11,6 +11,7 @@ import {
   LegacyStack,
   Thumbnail,
   Tag,
+  Badge,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { useState } from "react";
@@ -18,14 +19,30 @@ import { useState } from "react";
 export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
 
-  // Fetch inventory data with images and product type
-  const response = await admin.graphql(`
+  // Fetch locations
+  const locationsResponse = await admin.graphql(`
+    query {
+      locations(first: 10) {
+        nodes {
+          id
+          name
+          isActive
+        }
+      }
+    }
+  `);
+
+  const { data: { locations } } = await locationsResponse.json();
+
+  // Fetch products 
+  const productsResponse = await admin.graphql(`
     query {
       products(first: 50) {
         nodes {
           id
           title
           productType
+          vendor
           featuredImage {
             url
             altText
@@ -46,26 +63,28 @@ export const loader = async ({ request }) => {
     }
   `);
 
-  const {
-    data: {
-      products: { nodes: products },
-    },
-  } = await response.json();
+  const { data: { products } } = await productsResponse.json();
 
-  return json({ products });
+  return json({
+    products: products.nodes,
+    locations: locations.nodes
+  });
 };
 
 export default function InventoryVisualization() {
-  const { products } = useLoaderData();
+  const { products, locations } = useLoaderData();
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedType, setSelectedType] = useState("");
+  const [selectedVendor, setSelectedVendor] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
   
   // Transform data for visualization
   const inventoryData = products.map((product) => ({
     id: product.id,
     title: product.title,
     type: product.productType,
+    vendor: product.vendor,
     imageUrl: product.featuredImage?.url,
     imageAlt: product.featuredImage?.altText || product.title,
     variants: product.variants.nodes.map((variant) => {
@@ -73,6 +92,7 @@ export default function InventoryVisualization() {
         (acc, opt) => ({ ...acc, [opt.name.toLowerCase()]: opt.value }),
         {}
       );
+      
       return {
         id: variant.id,
         title: variant.title,
@@ -90,10 +110,15 @@ export default function InventoryVisualization() {
     v.selectedOptions.filter(o => o.name.toLowerCase() === 'color').map(o => o.value)
   )))];
   const types = [...new Set(products.map(p => p.productType).filter(Boolean))];
+  const vendors = [...new Set(products.map(p => p.vendor).filter(Boolean))];
+  const locationOptions = locations
+    .filter(l => l.isActive)
+    .map(l => ({ value: l.id, label: l.name }));
 
   // Filter products
   const filteredProducts = inventoryData.filter((product) => {
     if (selectedType && product.type !== selectedType) return false;
+    if (selectedVendor && product.vendor !== selectedVendor) return false;
     
     const hasMatchingVariant = product.variants.some(variant => {
       if (selectedSize && variant.size !== selectedSize) return false;
@@ -104,6 +129,14 @@ export default function InventoryVisualization() {
     return hasMatchingVariant;
   });
 
+  // Determine tag color based on quantity
+  const getTagColor = (quantity) => {
+    if (quantity <= 0) return "critical";
+    if (quantity < 5) return "warning";
+    if (quantity > 10) return "success";
+    return "default";
+  };
+
   return (
     <Page title="Inventory Collection View">
       <Layout>
@@ -112,7 +145,7 @@ export default function InventoryVisualization() {
             <Box padding="4">
               <LegacyStack vertical>
                 <Text variant="headingMd">Filter Products</Text>
-                <ButtonGroup>
+                <LegacyStack wrap>
                   <Select
                     label="Product Type"
                     options={[
@@ -121,6 +154,15 @@ export default function InventoryVisualization() {
                     ]}
                     onChange={setSelectedType}
                     value={selectedType}
+                  />
+                  <Select
+                    label="Vendor"
+                    options={[
+                      { label: "All Vendors", value: "" },
+                      ...vendors.map((vendor) => ({ label: vendor, value: vendor })),
+                    ]}
+                    onChange={setSelectedVendor}
+                    value={selectedVendor}
                   />
                   <Select
                     label="Size"
@@ -140,7 +182,16 @@ export default function InventoryVisualization() {
                     onChange={setSelectedColor}
                     value={selectedColor}
                   />
-                </ButtonGroup>
+                  <Select
+                    label="Warehouse Location"
+                    options={[
+                      { label: "All Locations", value: "" },
+                      ...locationOptions,
+                    ]}
+                    onChange={setSelectedLocation}
+                    value={selectedLocation}
+                  />
+                </LegacyStack>
               </LegacyStack>
             </Box>
           </Card>
@@ -163,15 +214,26 @@ export default function InventoryVisualization() {
                       <Text variant="headingSm" as="h3">
                         {product.title}
                       </Text>
-                      <Text variant="bodySm" as="p" color="subdued">
-                        {product.type}
-                      </Text>
+                      <LegacyStack>
+                        <Badge>{product.type}</Badge>
+                        <Badge status="info">{product.vendor}</Badge>
+                        {selectedLocation && (
+                          <Badge status="success">
+                            {locationOptions.find(l => l.value === selectedLocation)?.label}
+                          </Badge>
+                        )}
+                      </LegacyStack>
                       <LegacyStack wrap>
-                        {product.variants.map((variant) => (
-                          <Tag key={variant.id}>
-                            {`${variant.size || ''} ${variant.color || ''}: ${variant.quantity}`}
-                          </Tag>
-                        ))}
+                        {product.variants.map((variant) => {
+                          const quantity = variant.quantity;
+                          const tagColor = getTagColor(quantity);
+                          
+                          return (
+                            <Tag key={variant.id} color={tagColor}>
+                              {`${variant.size || ''} ${variant.color || ''}: ${quantity}`}
+                            </Tag>
+                          );
+                        })}
                       </LegacyStack>
                     </LegacyStack>
                   </LegacyStack>
