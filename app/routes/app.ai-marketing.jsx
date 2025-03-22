@@ -14,6 +14,7 @@ import {
   Select,
   Filters,
   Button,
+  Badge,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { useEffect, useState } from "react";
@@ -77,6 +78,42 @@ export default function AIMarketingRecommendations() {
     balancedInventory: [],
     overstockedItems: []
   });
+  
+  // Inventory threshold state
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
+  const [mediumStockThreshold, setMediumStockThreshold] = useState(15);
+
+  // Function to get tag color based on inventory level
+  const getTagColor = (quantity) => {
+    if (quantity <= lowStockThreshold) {
+      return 'critical'; // Red
+    } else if (quantity <= mediumStockThreshold) {
+      return 'warning';  // Yellow/Orange
+    } else {
+      return 'success';  // Green
+    }
+  };
+
+  // Function to format sizes with color coding
+  const formatSizesWithColors = (sizeString) => {
+    if (!sizeString) return null;
+    
+    const sizeEntries = sizeString.split(', ').map(entry => {
+      const [size, qtyStr] = entry.split(': ');
+      const quantity = parseInt(qtyStr, 10);
+      return { size, quantity };
+    });
+    
+    return (
+      <LegacyStack spacing="tight" wrap={true}>
+        {sizeEntries.map((entry, index) => (
+          <Badge key={index} status={getTagColor(entry.quantity)}>
+            {entry.size}: {entry.quantity}
+          </Badge>
+        ))}
+      </LegacyStack>
+    );
+  };
 
   // Extract unique vendors and product types
   const vendors = ['all', ...new Set(products.map(product => product.vendor).filter(Boolean))];
@@ -394,22 +431,20 @@ export default function AIMarketingRecommendations() {
                               size="small"
                             />
                           )}
-                          <Text variant="bodyMd" fontWeight="bold">
-                            {item.title}
-                          </Text>
-                          <Text variant="bodySm" color="subdued">
-                            - {item.reason}
-                          </Text>
-                          {item.sizes && (
-                            <Text variant="bodySm" color="subdued">
-                              Sizes: {item.sizes}
+                          <div>
+                            <Text variant="bodyMd" fontWeight="bold">
+                              {item.title}
                             </Text>
-                          )}
-                          {item.locationInfo && (
                             <Text variant="bodySm" color="subdued">
-                              {item.locationInfo}
+                              {item.reason}
                             </Text>
-                          )}
+                            {item.sizes && formatSizesWithColors(item.sizes)}
+                            {item.locationInfo && (
+                              <Text variant="bodySm" color="subdued">
+                                {item.locationInfo}
+                              </Text>
+                            )}
+                          </div>
                         </LegacyStack>
                       </List.Item>
                     ))}
@@ -444,22 +479,20 @@ export default function AIMarketingRecommendations() {
                               size="small"
                             />
                           )}
-                          <Text variant="bodyMd" fontWeight="bold">
-                            {item.title}
-                          </Text>
-                          <Text variant="bodySm" color="subdued">
-                            - {item.reason}
-                          </Text>
-                          {item.sizes && (
-                            <Text variant="bodySm" color="subdued">
-                              Sizes: {item.sizes}
+                          <div>
+                            <Text variant="bodyMd" fontWeight="bold">
+                              {item.title}
                             </Text>
-                          )}
-                          {item.locationInfo && (
                             <Text variant="bodySm" color="subdued">
-                              {item.locationInfo}
+                              {item.reason}
                             </Text>
-                          )}
+                            {item.sizes && formatSizesWithColors(item.sizes)}
+                            {item.locationInfo && (
+                              <Text variant="bodySm" color="subdued">
+                                {item.locationInfo}
+                              </Text>
+                            )}
+                          </div>
                         </LegacyStack>
                       </List.Item>
                     ))}
@@ -494,22 +527,20 @@ export default function AIMarketingRecommendations() {
                               size="small"
                             />
                           )}
-                          <Text variant="bodyMd" fontWeight="bold">
-                            {item.title}
-                          </Text>
-                          <Text variant="bodySm" color="subdued">
-                            - {item.reason}
-                          </Text>
-                          {item.sizes && (
-                            <Text variant="bodySm" color="subdued">
-                              Sizes: {item.sizes}
+                          <div>
+                            <Text variant="bodyMd" fontWeight="bold">
+                              {item.title}
                             </Text>
-                          )}
-                          {item.locationInfo && (
                             <Text variant="bodySm" color="subdued">
-                              {item.locationInfo}
+                              {item.reason}
                             </Text>
-                          )}
+                            {item.sizes && formatSizesWithColors(item.sizes)}
+                            {item.locationInfo && (
+                              <Text variant="bodySm" color="subdued">
+                                {item.locationInfo}
+                              </Text>
+                            )}
+                          </div>
                         </LegacyStack>
                       </List.Item>
                     ))}
@@ -544,22 +575,20 @@ export default function AIMarketingRecommendations() {
                               size="small"
                             />
                           )}
-                          <Text variant="bodyMd" fontWeight="bold">
-                            {item.title}
-                          </Text>
-                          <Text variant="bodySm" color="subdued">
-                            - {item.reason}
-                          </Text>
-                          {item.sizes && (
-                            <Text variant="bodySm" color="subdued">
-                              Sizes: {item.sizes}
+                          <div>
+                            <Text variant="bodyMd" fontWeight="bold">
+                              {item.title}
                             </Text>
-                          )}
-                          {item.locationInfo && (
                             <Text variant="bodySm" color="subdued">
-                              {item.locationInfo}
+                              {item.reason}
                             </Text>
-                          )}
+                            {item.sizes && formatSizesWithColors(item.sizes)}
+                            {item.locationInfo && (
+                              <Text variant="bodySm" color="subdued">
+                                {item.locationInfo}
+                              </Text>
+                            )}
+                          </div>
                         </LegacyStack>
                       </List.Item>
                     ))}
