@@ -1,10 +1,10 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "cd5e3aff5c6dfc771175e6aa53cbfd6c"
-application_url = "https://traveling-dried-looked-fascinating.trycloudflare.com"
+application_url = "https://visual-stocker.fly.dev"
 embedded = true
-name = "Vissy"
-handle = "vissy"
+name = "Visual Stocker"
+handle = "visual-stocker"
 
 [build]
 include_config_on_deploy = true
@@ -15,13 +15,13 @@ api_version = "2025-01"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "write_products,read_locations,read_inventory"
 
 [auth]
 redirect_urls = [
-  "https://traveling-dried-looked-fascinating.trycloudflare.com/auth/callback",
-  "https://traveling-dried-looked-fascinating.trycloudflare.com/auth/shopify/callback",
-  "https://traveling-dried-looked-fascinating.trycloudflare.com/api/auth/callback"
+  "https://visual-stocker.fly.dev/auth/callback",
+  "https://visual-stocker.fly.dev/auth/shopify/callback",
+  "https://visual-stocker.fly.dev/api/auth/callback"
 ]
 
 [pos]
