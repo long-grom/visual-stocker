@@ -54,23 +54,60 @@ export const loader = async ({ request }) => {
             nodes {
               id
               title
-              inventoryQuantity
+              inventoryItem {
+                id
+                inventoryLevels(first: 20) {
+                  edges {
+                    node {
+                      available
+                      location {
+                        id
+                        name
+                        active
+                        fulfillsOnlineOrders
+                        hasActiveInventory
+                      }
+                    }
+                  }
+                }
+                tracked
+                countryCodeOfOrigin
+                inventoryPolicy
+                inventoryManagement
+              }
               selectedOptions {
                 name
                 value
               }
+              sku
+              barcode
             }
+          }
+        }
+      }
+      locations(first: 20) {
+        nodes {
+          id
+          name
+          isActive
+          fulfillsOnlineOrders
+          hasActiveInventory
+          address {
+            address1
+            city
+            province
+            country
           }
         }
       }
     }
   `);
 
-  const { data: { products } } = await productsResponse.json();
+  const { data: { products, locations: fetchedLocations } } = await productsResponse.json();
 
   return json({
     products: products.nodes,
-    locations: locations.nodes
+    locations: fetchedLocations.nodes
   });
 };
 
@@ -85,28 +122,74 @@ export default function InventoryVisualization() {
   const [showThresholds, setShowThresholds] = useState(false);
   
   // Transform data for visualization
-  const inventoryData = products.map((product) => ({
-    id: product.id,
-    title: product.title,
-    type: product.productType,
-    vendor: product.vendor,
-    status: product.status,
-    imageUrl: product.featuredImage?.url,
-    imageAlt: product.featuredImage?.altText || product.title,
-    variants: product.variants.nodes.map((variant) => {
-      const options = variant.selectedOptions.reduce(
-        (acc, opt) => ({ ...acc, [opt.name.toLowerCase()]: opt.value }),
-        {}
-      );
+  const inventoryData = products.map((product) => {
+    const variantGroups = {};
+    
+    product.variants.nodes.forEach((variant) => {
+      const colorOption = variant.selectedOptions.find(opt => opt.name.toLowerCase() === 'color');
+      const sizeOption = variant.selectedOptions.find(opt => opt.name.toLowerCase() === 'size');
+      const color = colorOption ? colorOption.value : 'Default';
+      const size = sizeOption ? sizeOption.value : 'One Size';
       
-      return {
-        id: variant.id,
-        title: variant.title,
-        quantity: variant.inventoryQuantity || 0,
-        ...options,
-      };
-    }),
-  }));
+      const groupKey = `${color}`;
+      if (!variantGroups[groupKey]) {
+        variantGroups[groupKey] = {
+          color,
+          sizes: {},
+          totalQuantity: 0,
+          locationQuantities: {},
+          inventoryPolicy: variant.inventoryItem.inventoryPolicy,
+          inventoryManagement: variant.inventoryItem.inventoryManagement,
+          sku: variant.sku,
+          barcode: variant.barcode
+        };
+      }
+      
+      if (!variantGroups[groupKey].sizes[size]) {
+        variantGroups[groupKey].sizes[size] = {
+          quantity: 0,
+          locationQuantities: {}
+        };
+      }
+
+      variant.inventoryItem.inventoryLevels.edges.forEach(edge => {
+        const location = edge.node.location;
+        const quantity = edge.node.available || 0;
+        
+        if (!variantGroups[groupKey].locationQuantities[location.id]) {
+          variantGroups[groupKey].locationQuantities[location.id] = {
+            name: location.name,
+            quantity: 0,
+            fulfillsOnlineOrders: location.fulfillsOnlineOrders,
+            hasActiveInventory: location.hasActiveInventory
+          };
+        }
+        variantGroups[groupKey].locationQuantities[location.id].quantity += quantity;
+        
+        if (!variantGroups[groupKey].sizes[size].locationQuantities[location.id]) {
+          variantGroups[groupKey].sizes[size].locationQuantities[location.id] = {
+            name: location.name,
+            quantity: 0
+          };
+        }
+        variantGroups[groupKey].sizes[size].locationQuantities[location.id].quantity += quantity;
+        
+        variantGroups[groupKey].sizes[size].quantity += quantity;
+        variantGroups[groupKey].totalQuantity += quantity;
+      });
+    });
+
+    return {
+      id: product.id,
+      title: product.title,
+      type: product.productType,
+      vendor: product.vendor,
+      status: product.status,
+      imageUrl: product.featuredImage?.url,
+      imageAlt: product.featuredImage?.altText || product.title,
+      variantGroups: Object.values(variantGroups)
+    };
+  });
 
   // Get unique values for filters
   const types = [...new Set(products.map(p => p.productType).filter(Boolean))];
@@ -126,6 +209,13 @@ export default function InventoryVisualization() {
     if (selectedStatus && product.status !== selectedStatus) return false;
     if (selectedType && product.type !== selectedType) return false;
     if (selectedVendor && product.vendor !== selectedVendor) return false;
+    if (selectedLocation) {
+      // Check if any variant group has inventory at the selected location
+      return product.variantGroups.some(group => 
+        group.locationQuantities[selectedLocation] && 
+        group.locationQuantities[selectedLocation].quantity > 0
+      );
+    }
     return true;
   });
 
@@ -220,139 +310,28 @@ export default function InventoryVisualization() {
     };
   };
 
-  // Get the styled sample tags for thresholds
-  const getLowStockStyle = {
-    backgroundColor: '#FAD4D4',
-    color: '#D72C0D',
-    padding: '4px 8px',
-    borderRadius: '6px',
-    fontWeight: '500',
-    display: 'inline-block',
-    margin: '2px',
-    width: '120px',
-    textAlign: 'center',
-    boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
-    border: '1px solid #FFCECB'
-  };
-
-  const getMediumStockStyle = {
-    backgroundColor: '#FFF4E5',
-    color: '#B98900',
-    padding: '4px 8px',
-    borderRadius: '6px',
-    fontWeight: '500',
-    display: 'inline-block',
-    margin: '2px',
-    width: '120px',
-    textAlign: 'center',
-    boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
-    border: '1px solid #FFE3AC'
-  };
-
-  const getHighStockStyle = {
-    backgroundColor: '#E3F1DF',
-    color: '#108043',
-    padding: '4px 8px',
-    borderRadius: '6px',
-    fontWeight: '500',
-    display: 'inline-block',
-    margin: '2px',
-    width: '120px',
-    textAlign: 'center',
-    boxShadow: '0 1px 0 rgba(0, 0, 0, 0.05)',
-    border: '1px solid #BBE5B3'
-  };
-
   // Group variants by size and color 
-  const groupVariantsByAttributes = (variants) => {
-    // Standard sizes in order from smallest to largest
-    const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+  const groupVariantsByAttributes = (variantGroups) => {
+    const sizes = new Set();
+    const colors = new Set();
     
-    // Group by size first
-    const sizeGroups = {};
-    const colorGroups = {};
-    let totalQuantity = 0;
-    let hasSizeOrColor = false;
-    
-    // Process size variants
-    variants.forEach(variant => {
-      // Keep track of total inventory regardless of attributes
-      totalQuantity += variant.quantity;
-      
-      if (variant.size) {
-        hasSizeOrColor = true;
-        // For sizes, check if it's a standard size or a specialized size (like "XS (Kids)")
-        let key = variant.size;
-        if (key.includes('(')) {
-          // For specialized sizes like "XS (Kids)", use a special format
-          key = variant.size.split('(')[0].trim();
-          const specialType = variant.size.match(/\((.*)\)/)[1];
-          if (!sizeGroups[key]) {
-            sizeGroups[key] = {
-              special: {},
-              quantity: 0
-            };
-          }
-          if (!sizeGroups[key].special[specialType]) {
-            sizeGroups[key].special[specialType] = 0;
-          }
-          sizeGroups[key].special[specialType] += variant.quantity;
-        } else {
-          // For standard sizes
-          if (!sizeGroups[key]) {
-            sizeGroups[key] = {
-              quantity: 0,
-              special: {}
-            };
-          }
-          sizeGroups[key].quantity += variant.quantity;
-        }
-      }
-      
-      // Process color variants
-      if (variant.color) {
-        hasSizeOrColor = true;
-        if (!colorGroups[variant.color]) {
-          colorGroups[variant.color] = 0;
-        }
-        colorGroups[variant.color] += variant.quantity;
-      }
+    variantGroups.forEach(group => {
+      colors.add(group.color);
+      Object.keys(group.sizes).forEach(size => sizes.add(size));
     });
-    
-    // Sort sizes according to standard order
-    const sortedSizes = Object.keys(sizeGroups).sort((a, b) => {
+
+    const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL', 'One Size'];
+    const sortedSizes = Array.from(sizes).sort((a, b) => {
       const indexA = sizeOrder.indexOf(a);
       const indexB = sizeOrder.indexOf(b);
-      
-      // If both sizes are in our order list, use that order
-      if (indexA !== -1 && indexB !== -1) {
-        return indexA - indexB;
-      }
-      // If only one is in the order list, prioritize it
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-      
-      // Otherwise, alphabetical
-      return a.localeCompare(b);
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
     });
-    
-    // If no size or color attributes, create a single "Qty" entry
-    if (!hasSizeOrColor && variants.length > 0) {
-      return {
-        sizes: [{ size: "Qty", quantity: totalQuantity, special: {} }],
-        colors: []
-      };
-    }
-    
+
     return {
-      sizes: sortedSizes.map(size => ({ 
-        size, 
-        ...sizeGroups[size] 
-      })),
-      colors: Object.entries(colorGroups).map(([color, quantity]) => ({ 
-        color, 
-        quantity 
-      }))
+      sizes: sortedSizes,
+      colors: Array.from(colors)
     };
   };
 
@@ -363,174 +342,130 @@ export default function InventoryVisualization() {
   }, [lowStockThreshold, mediumStockThreshold]);
 
   return (
-    <Page title="Inventory Collection View">
+    <Page title="Inventory Analysis">
       <Layout>
         <Layout.Section>
           <Card>
-            <Box padding="4">
+            <Card.Section>
               <LegacyStack vertical>
-                <LegacyStack alignment="space-between">
-                  <Text variant="headingMd">Filter Products</Text>
-                  <Button
-                    onClick={() => setShowThresholds(!showThresholds)}
-                    plain
-                  >
-                    Inventory Thresholds
-                  </Button>
-                </LegacyStack>
-                
-                {showThresholds && (
-                  <LegacyStack vertical spacing="4">
-                    <Text variant="headingMd">Inventory Level Thresholds</Text>
-                    
-                    <Box paddingBlockStart="4" paddingBlockEnd="4">
-                      <Text>Low Stock Threshold (Red)</Text>
-                      <RangeSlider
-                        label="Low Stock Threshold (Red)"
-                        value={lowStockThreshold}
-                        onChange={setLowStockThreshold}
-                        min={0}
-                        max={20}
-                        output
-                        labelHidden
-                      />
-                    </Box>
-                    
-                    <Box paddingBlockStart="4" paddingBlockEnd="4">
-                      <Text>Medium Stock Threshold (Yellow)</Text>
-                      <RangeSlider
-                        label="Medium Stock Threshold (Yellow)"
-                        value={mediumStockThreshold}
-                        onChange={setMediumStockThreshold}
-                        min={5}
-                        max={50}
-                        output
-                        labelHidden
-                      />
-                    </Box>
-                    
-                    <LegacyStack spacing="3">
-                      <div style={getLowStockStyle}>
-                        Low: 0-{lowStockThreshold-1} items
-                      </div>
-                      <div style={getMediumStockStyle}>
-                        Medium: {lowStockThreshold}-{mediumStockThreshold-1} items
-                      </div>
-                      <div style={getHighStockStyle}>
-                        High: {mediumStockThreshold}+ items
-                      </div>
-                    </LegacyStack>
-                  </LegacyStack>
-                )}
-                
-                <LegacyStack wrap>
+                <LegacyStack distribution="equalSpacing">
                   <Select
                     label="Status"
                     options={statusOptions}
-                    onChange={setSelectedStatus}
                     value={selectedStatus}
+                    onChange={setSelectedStatus}
                   />
                   <Select
-                    label="Product Type"
-                    options={[
-                      { label: "All Types", value: "" },
-                      ...types.map((type) => ({ label: type, value: type })),
-                    ]}
-                    onChange={setSelectedType}
+                    label="Type"
+                    options={[{ value: "", label: "All Types" }, ...types.map(t => ({ value: t, label: t }))]}
                     value={selectedType}
+                    onChange={setSelectedType}
                   />
                   <Select
                     label="Vendor"
-                    options={[
-                      { label: "All Vendors", value: "" },
-                      ...vendors.map((vendor) => ({ label: vendor, value: vendor })),
-                    ]}
-                    onChange={setSelectedVendor}
+                    options={[{ value: "", label: "All Vendors" }, ...vendors.map(v => ({ value: v, label: v }))]}
                     value={selectedVendor}
+                    onChange={setSelectedVendor}
                   />
                   <Select
-                    label="Warehouse Location"
-                    options={[
-                      { label: "All Locations", value: "" },
-                      ...locationOptions,
-                    ]}
-                    onChange={setSelectedLocation}
+                    label="Location"
+                    options={[{ value: "", label: "All Locations" }, ...locationOptions]}
                     value={selectedLocation}
+                    onChange={setSelectedLocation}
                   />
                 </LegacyStack>
+                <ButtonGroup>
+                  <Button onClick={() => setShowThresholds(!showThresholds)}>
+                    {showThresholds ? "Hide Thresholds" : "Show Thresholds"}
+                  </Button>
+                </ButtonGroup>
+                {showThresholds && (
+                  <LegacyStack distribution="equalSpacing">
+                    <RangeSlider
+                      label="Low Stock Threshold"
+                      value={lowStockThreshold}
+                      onChange={setLowStockThreshold}
+                      min={0}
+                      max={20}
+                      output
+                    />
+                    <RangeSlider
+                      label="Medium Stock Threshold"
+                      value={mediumStockThreshold}
+                      onChange={setMediumStockThreshold}
+                      min={0}
+                      max={20}
+                      output
+                    />
+                  </LegacyStack>
+                )}
               </LegacyStack>
-            </Box>
+            </Card.Section>
           </Card>
         </Layout.Section>
-        
         <Layout.Section>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
-            {filteredProducts.map((product) => (
-              <Card key={product.id}>
-                <Box padding="4">
-                  <LegacyStack vertical spacing="4">
-                    <div style={{ aspectRatio: "1", position: "relative" }}>
-                      <Thumbnail
-                        source={product.imageUrl || ""}
-                        alt={product.imageAlt}
-                        size="large"
-                      />
-                    </div>
-                    <LegacyStack vertical spacing="2">
-                      <Text variant="headingSm" as="h3">
-                        {product.title}
-                      </Text>
+          <Card>
+            <Card.Section>
+              <LegacyStack vertical>
+                {filteredProducts.map((product) => {
+                  const { sizes, colors } = groupVariantsByAttributes(product.variantGroups);
+                  return (
+                    <Box key={product.id} padding="4">
                       <LegacyStack>
-                        <Badge>{product.type}</Badge>
-                        <Badge status="info">{product.vendor}</Badge>
-                        {selectedLocation && (
-                          <Badge status="success">
-                            {locationOptions.find(l => l.value === selectedLocation)?.label}
-                          </Badge>
-                        )}
+                        <Thumbnail
+                          source={product.imageUrl}
+                          alt={product.imageAlt}
+                          size="large"
+                        />
+                        <Box>
+                          <Text variant="headingMd" as="h3">{product.title}</Text>
+                          <Text variant="bodySm" as="p" color="subdued">
+                            {product.type} • {product.vendor}
+                          </Text>
+                          {selectedLocation && (
+                            <Badge status="info">
+                              {product.variantGroups[0]?.locationQuantities[selectedLocation]?.name || 'Location not available'}
+                            </Badge>
+                          )}
+                        </Box>
                       </LegacyStack>
-                      
-                      <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: 'repeat(4, 65px)', 
-                        gap: '5px',
-                        justifyContent: 'center',
-                        margin: '0 auto',
-                        rowGap: '5px'
-                      }}>
-                        {groupVariantsByAttributes(product.variants).sizes.map(({ size, quantity, special }, index) => {
-                          const hasSpecial = Object.keys(special).length > 0;
-                          const tagStyles = getTagStyles(quantity);
-                          
-                          return (
-                            <div key={size} style={{ 
-                              width: '65px', 
-                              padding: '0', 
-                              margin: '0',
-                              boxSizing: 'border-box'
-                            }}>
-                              <div style={tagStyles}>
-                                <span><strong>{size}</strong>: {quantity}</span>
-                              </div>
-                              
-                              {hasSpecial && Object.entries(special).map(([specialType, specialQuantity], specIndex) => (
-                                <div 
-                                  key={`${size}${specialType}`} 
-                                  style={{...getTagStyles(specialQuantity), marginTop: '5px'}}
-                                >
-                                  <span><strong>{size}</strong>: {specialQuantity}</span>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </LegacyStack>
-                  </LegacyStack>
-                </Box>
-              </Card>
-            ))}
-          </div>
+                      <Box paddingBlockStart="4">
+                        <LegacyStack vertical>
+                          {colors.map((color) => {
+                            const group = product.variantGroups.find(g => g.color === color);
+                            return (
+                              <Box key={color}>
+                                <Text variant="headingSm" as="h4">{color}</Text>
+                                <LegacyStack>
+                                  {sizes.map((size) => {
+                                    const sizeData = group.sizes[size];
+                                    const quantity = sizeData?.quantity || 0;
+                                    return (
+                                      <Box key={size} padding="2">
+                                        <Text variant="bodySm" as="p">{size}</Text>
+                                        <div style={getTagStyles(quantity)}>
+                                          {quantity}
+                                        </div>
+                                        {selectedLocation && sizeData?.locationQuantities[selectedLocation] && (
+                                          <Text variant="bodySm" as="p" color="subdued">
+                                            {sizeData.locationQuantities[selectedLocation].quantity} at {sizeData.locationQuantities[selectedLocation].name}
+                                          </Text>
+                                        )}
+                                      </Box>
+                                    );
+                                  })}
+                                </LegacyStack>
+                              </Box>
+                            );
+                          })}
+                        </LegacyStack>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </LegacyStack>
+            </Card.Section>
+          </Card>
         </Layout.Section>
       </Layout>
     </Page>
