@@ -1,11 +1,13 @@
 import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
-import { AppProvider } from "@shopify/shopify-app-remix/react";
+import { AppProvider as ShopifyAppBridgeProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
-import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+import { AppProvider } from "@shopify/polaris";
+import enTranslations from "@shopify/polaris/locales/en.json";
+import "@shopify/polaris/build/esm/styles.css";
 import { authenticate } from "../shopify.server";
 
-export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+export const links = () => [];
 
 export const loader = async ({ request }) => {
   await authenticate.admin(request);
@@ -17,17 +19,19 @@ export default function App() {
   const { apiKey } = useLoaderData();
 
   return (
-    <AppProvider isEmbeddedApp apiKey={apiKey}>
-      <NavMenu>
-        <Link to="/app" rel="home">
-          Home
-        </Link>
-        <Link to="/app/inventory">Inventory Analysis</Link>
-        <Link to="/app/marketing">Marketing Recommendations</Link>
-        <Link to="/app/planning">Inventory Planning</Link>
-      </NavMenu>
-      <Outlet />
-    </AppProvider>
+    <ShopifyAppBridgeProvider isEmbeddedApp apiKey={apiKey}>
+      <AppProvider i18n={enTranslations}>
+        <NavMenu>
+          <Link to="/app" rel="home">
+            Home
+          </Link>
+          <Link to="/app/inventory">Inventory Analysis</Link>
+          <Link to="/app/marketing">Marketing Recommendations</Link>
+          <Link to="/app/planning">Inventory Planning</Link>
+        </NavMenu>
+        <Outlet />
+      </AppProvider>
+    </ShopifyAppBridgeProvider>
   );
 }
 

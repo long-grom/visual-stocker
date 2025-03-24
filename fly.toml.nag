@@ -1,9 +1,4 @@
-# fly.toml app configuration file generated for visual-stocker-custom on 2025-03-22T14:15:45+11:00
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'visual-stocker-custom'
+app = 'visual-stocker-nag'
 primary_region = 'syd'
 
 [build]
@@ -11,8 +6,9 @@ primary_region = 'syd'
 [env]
   PORT = '3000'
   SCOPES = 'read_inventory,read_locations,write_products'
-  SHOPIFY_APP_URL = 'https://visual-stocker-custom.fly.dev'
-
+  SHOPIFY_API_KEY = 'ccd4ba6230c1930e35d5907d281e0fe0'
+  SHOPIFY_APP_URL = 'https://visual-stocker-nag.fly.dev'
+  SHOPIFY_API_SECRET = 'd25a945dd5fc7c8599130cb6f526807f'
 [processes]
   app = 'node ./dbsetup.js npm run docker-start'
 
@@ -39,4 +35,4 @@ primary_region = 'syd'
 
 [[webhooks.subscriptions]]
 compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
-uri = "https://visual-stocker-custom.fly.dev/webhooks/test"
+uri = "https://visual-stocker-nag.fly.dev/webhooks/test" 

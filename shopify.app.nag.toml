@@ -1,10 +1,10 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "cd5e3aff5c6dfc771175e6aa53cbfd6c"
-application_url = "https://visual-stocker-custom.fly.dev"
+application_url = "https://visual-stocker.fly.dev"
 embedded = true
-name = "Visual Stocker Custom"
-handle = "visual-stocker-custom"
+name = "Visual Stocker NAG"
+handle = "visual-stocker-nag"
 
 [build]
 include_config_on_deploy = true
@@ -16,7 +16,7 @@ api_version = "2025-01"
 # Mandatory privacy webhooks for GDPR compliance
 [[webhooks.subscriptions]]
 compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
-uri = "https://visual-stocker-custom.fly.dev/test-webhook"
+uri = "https://visual-stocker.fly.dev/test-webhook"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
@@ -24,10 +24,10 @@ scopes = "write_products,read_locations,read_inventory"
 
 [auth]
 redirect_urls = [
-  "https://visual-stocker-custom.fly.dev/auth/callback",
-  "https://visual-stocker-custom.fly.dev/auth/shopify/callback",
-  "https://visual-stocker-custom.fly.dev/api/auth/callback"
+  "https://visual-stocker.fly.dev/auth/callback",
+  "https://visual-stocker.fly.dev/auth/shopify/callback",
+  "https://visual-stocker.fly.dev/api/auth/callback"
 ]
 
 [pos]
-embedded = false
+embedded = false 
