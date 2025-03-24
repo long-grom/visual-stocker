@@ -24,6 +24,7 @@ export default function App() {
         </Link>
         <Link to="/app/inventory">Inventory Analysis</Link>
         <Link to="/app/marketing">Marketing Recommendations</Link>
+        <Link to="/app/planning">Inventory Planning</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

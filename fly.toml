@@ -1,0 +1,38 @@
+# fly.toml app configuration file generated for visual-stocker-custom on 2025-03-22T14:15:45+11:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'visual-stocker-custom'
+primary_region = 'syd'
+
+[build]
+
+[env]
+  PORT = '3000'
+  SCOPES = 'read_inventory,read_locations,write_products'
+  SHOPIFY_API_KEY = '56ec7e8c56ef7fbac1395b1db8c39222'
+  SHOPIFY_APP_URL = 'https://visual-stocker-custom.fly.dev'
+
+[processes]
+  app = 'node ./dbsetup.js npm run docker-start'
+
+[[mounts]]
+  source = 'data'
+  destination = '/data'
+  auto_extend_size_threshold = 80
+  auto_extend_size_increment = '1GB'
+  auto_extend_size_limit = '10GB'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
